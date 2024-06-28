@@ -4,8 +4,10 @@
 
 mod basic;
 mod glsl;
-use basic::{AmbientLight, MyVertex};
-use glsl::{fs, vs};
+use basic::MyVertex;
+use glsl::{deferred_frag, deferred_vert, lighting_frag, lighting_vert};
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::render_pass::Subpass;
 mod utils;
 use std::sync::Arc;
 use std::time::Instant;
@@ -13,7 +15,6 @@ use utils::*;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo};
-use vulkano::image::ImageUsage;
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::viewport::Viewport;
@@ -85,7 +86,7 @@ fn main() {
                 min_image_count: caps.min_image_count,
                 image_format,
                 image_extent: dimensions.into(),
-                image_usage: ImageUsage::COLOR_ATTACHMENT,
+                image_usage: caps.supported_usage_flags,
                 composite_alpha,
                 ..Default::default()
             },
@@ -96,48 +97,9 @@ fn main() {
     let render_pass = get_render_pass(device.clone(), swapchain.clone());
 
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-    let mut framebuffers = get_framebuffers(&images, render_pass.clone(), memory_allocator.clone());
+    let (mut framebuffers, mut color_buffer, mut normal_buffer) =
+        get_framebuffers(&images, render_pass.clone(), memory_allocator.clone());
 
-    // let vertexts: Vec<MyVertex> = vec![
-    //     MyVertex {
-    //         position: [-0.5, -0.5],
-    //         color: [1.0, 0.0, 0.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.0, 0.5],
-    //         color: [0.0, 1.0, 0.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.5, -0.25],
-    //         color: [0.0, 0.0, 1.0],
-    //     },
-    // ];
-    // let vertices = [
-    //     MyVertex {
-    //         position: [-0.5, 0.5, -0.5],
-    //         color: [0.0, 0.0, 0.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.5, 0.5, -0.5],
-    //         color: [0.0, 0.0, 0.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.0, -0.5, -0.5],
-    //         color: [0.0, 0.0, 0.0],
-    //     },
-    //     MyVertex {
-    //         position: [-0.5, -0.5, -0.6],
-    //         color: [1.0, 1.0, 1.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.5, -0.5, -0.6],
-    //         color: [1.0, 1.0, 1.0],
-    //     },
-    //     MyVertex {
-    //         position: [0.0, 0.5, -0.6],
-    //         color: [1.0, 1.0, 1.0],
-    //     },
-    // ];
     let vertices = [
         // front face
         MyVertex {
@@ -342,20 +304,43 @@ fn main() {
     .unwrap();
 
     let rotation_start = Instant::now();
-    let vs = vs::load(device.clone()).expect("failed to create shader module");
-    let fs = fs::load(device.clone()).expect("failed to create shader module");
 
+    let deferred_vert = deferred_vert::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
+    let deferred_frag = deferred_frag::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
+    let lighting_vert = lighting_vert::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
+    let lighting_frag = lighting_frag::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
     let mut viewport = Viewport {
         offset: [0.0, 0.0],
         extent: window.inner_size().into(),
         depth_range: 0.0..=1.0,
     };
 
-    let mut pipeline = get_pipeline(
+    let deferred_pass = Subpass::from(render_pass.clone(), 0).unwrap();
+    let lighting_pass = Subpass::from(render_pass.clone(), 1).unwrap();
+    let mut deferred_pipeline = get_deferred_pipeline(
         device.clone(),
-        vs.clone(),
-        fs.clone(),
-        render_pass.clone(),
+        deferred_pass.clone(),
+        deferred_vert.clone(),
+        deferred_frag.clone(),
+        viewport.clone(),
+    );
+    let mut lighting_pipeline = get_lighting_pipeline(
+        device.clone(),
+        lighting_pass.clone(),
+        lighting_vert.clone(),
+        lighting_frag.clone(),
         viewport.clone(),
     );
 
@@ -369,13 +354,8 @@ fn main() {
     let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; frames_in_flight];
     let mut previous_fence_i = 0;
 
-    let set = get_descriptor_set(
-        &rotation_start,
-        memory_allocator.clone(),
-        &swapchain,
-        &device,
-        &pipeline,
-    );
+    let descriptor_set_allocator =
+        StandardDescriptorSetAllocator::new(device.clone(), Default::default());
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
@@ -413,33 +393,54 @@ fn main() {
                     window_resized = false;
 
                     viewport.extent = new_dimensions.into();
-                    pipeline = get_pipeline(
+                    deferred_pipeline = get_deferred_pipeline(
                         device.clone(),
-                        vs.clone(),
-                        fs.clone(),
-                        render_pass.clone(),
+                        Subpass::from(render_pass.clone(), 0).unwrap().clone(),
+                        deferred_vert.clone(),
+                        deferred_frag.clone(),
+                        viewport.clone(),
+                    );
+                    lighting_pipeline = get_lighting_pipeline(
+                        device.clone(),
+                        Subpass::from(render_pass.clone(), 1).unwrap().clone(),
+                        lighting_vert.clone(),
+                        lighting_frag.clone(),
                         viewport.clone(),
                     );
                 }
                 swapchain = new_swapchain;
-                framebuffers =
+
+                // size 变化时这些变量也需要随之更新
+                (framebuffers, color_buffer, normal_buffer) =
                     get_framebuffers(&new_images, render_pass.clone(), memory_allocator.clone());
             }
 
-            let set = get_descriptor_set(
+            let deferred_set = get_deferred_descriptor_set(
                 &rotation_start,
                 memory_allocator.clone(),
                 &swapchain,
-                &device,
-                &pipeline,
+                &deferred_pipeline,
+                &descriptor_set_allocator,
+            );
+            let lighting_set = get_lighting_descriptor_set(
+                &rotation_start,
+                memory_allocator.clone(),
+                color_buffer.clone(),
+                normal_buffer.clone(),
+                &swapchain,
+                &lighting_pipeline,
+                &descriptor_set_allocator,
             );
             let command_buffers = get_command_buffers(
                 &command_buffer_allocator,
                 &queue,
-                &pipeline,
+                &deferred_pipeline,
+                &lighting_pipeline,
                 &framebuffers,
                 &vertex_buffer,
-                &set,
+                &deferred_set,
+                &lighting_set,
+                viewport.clone(),
             );
 
             let (image_i, suboptimal, acquire_future) =
