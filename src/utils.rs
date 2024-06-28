@@ -34,7 +34,7 @@ use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpa
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain};
 
-use crate::basic::{AmbientLight, MyVertex};
+use crate::basic::{AmbientLight, DirectionalLight, MyVertex};
 use crate::glsl::vs;
 
 pub fn select_physical_device(
@@ -254,9 +254,6 @@ pub fn get_descriptor_set(
     let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
     let rotation =
         Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
-    // let rotation = Matrix4::from_axis_angle(vec3(0.0, 0.0, 1.0), Rad(50 as f32))
-    //     * Matrix4::from_axis_angle(vec3(0.0, 1.0, 0.0), Rad(30 as f32))
-    //     * Matrix4::from_axis_angle(vec3(1.0, 0.0, 0.0), Rad(20 as f32));
 
     // note: this teapot was meant for OpenGL where the origin is at the lower left
     //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
@@ -274,11 +271,6 @@ pub fn get_descriptor_set(
         view: (view * scale).into(),
         projection: proj.into(),
     };
-    // let uniform_data = vs::MVP {
-    //     model: Matrix4::from(rotation).into(),
-    //     view: view.into(),
-    //     projection: proj.into(),
-    // };
     let uniform_buffer = Buffer::from_data(
         memory_allocator.clone(),
         BufferCreateInfo {
@@ -294,6 +286,7 @@ pub fn get_descriptor_set(
     )
     .expect("failed to create uniform_buffer");
 
+    // 环境光
     let ambient_light = AmbientLight {
         color: [1.0; 3],
         intensity: 0.2,
@@ -313,6 +306,26 @@ pub fn get_descriptor_set(
     )
     .expect("failed to create ambient buffer");
 
+    // 定向光
+    let directional_light = DirectionalLight {
+        position: [-4.0, -4.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+    };
+    let directional_buffer = Buffer::from_data(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::UNIFORM_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        directional_light.clone(),
+    )
+    .expect("failed to create directional light buffer");
+
     let descriptor_set_allocator =
         StandardDescriptorSetAllocator::new(device.clone(), Default::default());
     let layout = pipeline.layout().set_layouts().get(0).unwrap();
@@ -322,6 +335,7 @@ pub fn get_descriptor_set(
         [
             WriteDescriptorSet::buffer(0, uniform_buffer.clone()),
             WriteDescriptorSet::buffer(1, ambient_buffer.clone()),
+            WriteDescriptorSet::buffer(2, directional_buffer.clone()),
         ],
         [],
     )
