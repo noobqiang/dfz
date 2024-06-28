@@ -172,7 +172,7 @@ pub fn get_pipeline(
             }),
             rasterization_state: Some(RasterizationState {
                 cull_mode: CullMode::Back,
-                front_face: FrontFace::Clockwise,
+                front_face: FrontFace::CounterClockwise,
                 ..Default::default()
             }),
             multisample_state: Some(MultisampleState::default()),
