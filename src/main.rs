@@ -4,8 +4,10 @@
 
 mod basic;
 mod glsl;
-use basic::MyVertex;
-use glsl::{deferred_frag, deferred_vert, lighting_frag, lighting_vert};
+use basic::{AmbientLight, DirectionalLight, MyVertex};
+use glsl::{
+    ambient_frag, ambient_vert, deferred_frag, deferred_vert, directional_frag, directional_vert,
+};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::render_pass::Subpass;
 mod utils;
@@ -313,11 +315,19 @@ fn main() {
         .expect("failed to create shader module")
         .entry_point("main")
         .unwrap();
-    let lighting_vert = lighting_vert::load(device.clone())
+    let directional_vert = directional_vert::load(device.clone())
         .expect("failed to create shader module")
         .entry_point("main")
         .unwrap();
-    let lighting_frag = lighting_frag::load(device.clone())
+    let directional_frag = directional_frag::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
+    let ambient_vert = ambient_vert::load(device.clone())
+        .expect("failed to create shader module")
+        .entry_point("main")
+        .unwrap();
+    let ambient_frag = ambient_frag::load(device.clone())
         .expect("failed to create shader module")
         .entry_point("main")
         .unwrap();
@@ -336,13 +346,44 @@ fn main() {
         deferred_frag.clone(),
         viewport.clone(),
     );
-    let mut lighting_pipeline = get_lighting_pipeline(
+    let mut directional_pipeline = get_lighting_pipeline(
         device.clone(),
         lighting_pass.clone(),
-        lighting_vert.clone(),
-        lighting_frag.clone(),
+        directional_vert.clone(),
+        directional_frag.clone(),
         viewport.clone(),
     );
+    let mut ambient_pipeline = get_lighting_pipeline(
+        device.clone(),
+        lighting_pass.clone(),
+        ambient_vert.clone(),
+        ambient_frag.clone(),
+        viewport.clone(),
+    );
+
+    // 环境光
+    let ambient_light = AmbientLight {
+        color: [1.0; 3],
+        intensity: 0.1,
+    };
+
+    // 定向光
+    let directional_light = DirectionalLight {
+        position: [-4.0, -4.0, 0.0, 1.0],
+        color: [0.0, 0.0, 0.0],
+    };
+    let directional_light_r = DirectionalLight {
+        position: [-4.0, 0.0, -4.0, 1.0],
+        color: [1.0, 0.0, 0.0],
+    };
+    let directional_light_g = DirectionalLight {
+        position: [0.0, -4.0, 1.0, 1.0],
+        color: [0.0, 1.0, 0.0],
+    };
+    let directional_light_b = DirectionalLight {
+        position: [4.0, -2.0, 1.0, 1.0],
+        color: [0.0, 0.0, 1.0],
+    };
 
     let command_buffer_allocator =
         StandardCommandBufferAllocator::new(device.clone(), Default::default());
@@ -400,11 +441,18 @@ fn main() {
                         deferred_frag.clone(),
                         viewport.clone(),
                     );
-                    lighting_pipeline = get_lighting_pipeline(
+                    directional_pipeline = get_lighting_pipeline(
                         device.clone(),
                         Subpass::from(render_pass.clone(), 1).unwrap().clone(),
-                        lighting_vert.clone(),
-                        lighting_frag.clone(),
+                        directional_vert.clone(),
+                        directional_frag.clone(),
+                        viewport.clone(),
+                    );
+                    ambient_pipeline = get_lighting_pipeline(
+                        device.clone(),
+                        Subpass::from(render_pass.clone(), 1).unwrap().clone(),
+                        ambient_vert.clone(),
+                        ambient_frag.clone(),
                         viewport.clone(),
                     );
                 }
@@ -422,26 +470,109 @@ fn main() {
                 &deferred_pipeline,
                 &descriptor_set_allocator,
             );
-            let lighting_set = get_lighting_descriptor_set(
+            let directional_set = get_lighting_descriptor_set(
+                &directional_light,
                 &rotation_start,
                 memory_allocator.clone(),
                 color_buffer.clone(),
                 normal_buffer.clone(),
                 &swapchain,
-                &lighting_pipeline,
+                &directional_pipeline,
                 &descriptor_set_allocator,
             );
-            let command_buffers = get_command_buffers(
+            let direc_r_set = get_lighting_descriptor_set(
+                &directional_light_r,
+                &rotation_start,
+                memory_allocator.clone(),
+                color_buffer.clone(),
+                normal_buffer.clone(),
+                &swapchain,
+                &directional_pipeline,
+                &descriptor_set_allocator,
+            );
+            let direc_g_set = get_lighting_descriptor_set(
+                &directional_light_g,
+                &rotation_start,
+                memory_allocator.clone(),
+                color_buffer.clone(),
+                normal_buffer.clone(),
+                &swapchain,
+                &directional_pipeline,
+                &descriptor_set_allocator,
+            );
+            let direc_b_set = get_lighting_descriptor_set(
+                &directional_light_b,
+                &rotation_start,
+                memory_allocator.clone(),
+                color_buffer.clone(),
+                normal_buffer.clone(),
+                &swapchain,
+                &directional_pipeline,
+                &descriptor_set_allocator,
+            );
+            let ambient_set = get_lighting_descriptor_set(
+                &ambient_light,
+                &rotation_start,
+                memory_allocator.clone(),
+                color_buffer.clone(),
+                normal_buffer.clone(),
+                &swapchain,
+                &ambient_pipeline,
+                &descriptor_set_allocator,
+            );
+            let mut temp_builder = get_basic_command_buffers(
                 &command_buffer_allocator,
                 &queue,
                 &deferred_pipeline,
-                &lighting_pipeline,
                 &framebuffers,
                 &vertex_buffer,
                 &deferred_set,
-                &lighting_set,
                 viewport.clone(),
             );
+            temp_builder = append_light_command(
+                temp_builder,
+                &vertex_buffer,
+                &directional_pipeline,
+                &direc_r_set,
+            );
+            temp_builder = append_light_command(
+                temp_builder,
+                &vertex_buffer,
+                &directional_pipeline,
+                &direc_g_set,
+            );
+            temp_builder = append_light_command(
+                temp_builder,
+                &vertex_buffer,
+                &directional_pipeline,
+                &direc_b_set,
+            );
+            temp_builder = append_light_command(
+                temp_builder,
+                &vertex_buffer,
+                &directional_pipeline,
+                &directional_set,
+            );
+            temp_builder = append_light_command(
+                temp_builder,
+                &vertex_buffer,
+                &ambient_pipeline,
+                &ambient_set,
+            );
+            let command_buffers = end_render_pass(temp_builder);
+            // let command_buffers = get_command_buffers(
+            //     &command_buffer_allocator,
+            //     &queue,
+            //     &deferred_pipeline,
+            //     &directional_pipeline,
+            //     &ambient_pipeline,
+            //     &framebuffers,
+            //     &vertex_buffer,
+            //     &deferred_set,
+            //     &directional_set,
+            //     &ambient_set,
+            //     viewport.clone(),
+            // );
 
             let (image_i, suboptimal, acquire_future) =
                 match swapchain::acquire_next_image(swapchain.clone(), None)

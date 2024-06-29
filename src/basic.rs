@@ -15,7 +15,7 @@ pub struct AmbientLight {
 /// 定向光
 pub struct DirectionalLight {
     /// 位置
-    pub position: [f32; 3],
+    pub position: [f32; 4],
     /// 颜色
     pub color: [f32; 3],
 }

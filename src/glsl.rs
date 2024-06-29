@@ -26,16 +26,34 @@ pub mod deferred_frag {
     }
 }
 
-pub mod lighting_vert {
+/// 环境光 -- 顶点着色器
+pub mod ambient_vert {
     vulkano_shaders::shader! {
         ty: "vertex",
-        path: "src/GLSL/lighting.vert",
+        path: "src/GLSL/ambient.vert",
     }
 }
 
-pub mod lighting_frag {
+/// 环境光 -- 片段着色器
+pub mod ambient_frag {
     vulkano_shaders::shader! {
         ty: "fragment",
-        path: "src/GLSL/lighting.frag",
+        path: "src/GLSL/ambient.frag",
+    }
+}
+
+/// 定向光 -- 顶点着色器
+pub mod directional_vert {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/GLSL/directional.vert",
+    }
+}
+
+///定向光 -- 片段着色器
+pub mod directional_frag {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/GLSL/directional.frag",
     }
 }

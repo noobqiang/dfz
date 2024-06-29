@@ -1,7 +1,7 @@
-use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
+use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
 use std::sync::Arc;
 use std::time::Instant;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo,
@@ -18,7 +18,9 @@ use vulkano::instance::Instance;
 use vulkano::memory::allocator::{
     AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
 };
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::color_blend::{
+    AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+};
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
@@ -34,7 +36,7 @@ use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpa
 use vulkano::shader::EntryPoint;
 use vulkano::swapchain::{Surface, Swapchain};
 
-use crate::basic::{AmbientLight, DirectionalLight, MyVertex};
+use crate::basic::MyVertex;
 use crate::glsl::vs;
 
 pub fn select_physical_device(
@@ -210,10 +212,6 @@ pub fn get_deferred_pipeline(
     )
     .unwrap();
 
-    // let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
-    // let mut depth_stencil_state = DepthStencilState::default();
-    // depth_stencil_state.depth = Some(DepthState::simple());
-
     GraphicsPipeline::new(
         device.clone(),
         None,
@@ -246,6 +244,7 @@ pub fn get_deferred_pipeline(
     .unwrap()
 }
 
+/// 获取一个 lighting GraphicsPipeline
 pub fn get_lighting_pipeline(
     device: Arc<Device>,
     subpass: Subpass,
@@ -270,10 +269,6 @@ pub fn get_lighting_pipeline(
     )
     .unwrap();
 
-    // let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
-    // let mut depth_stencil_state = DepthStencilState::default();
-    // depth_stencil_state.depth = Some(DepthState::simple());
-
     GraphicsPipeline::new(
         device.clone(),
         None,
@@ -293,7 +288,17 @@ pub fn get_lighting_pipeline(
             multisample_state: Some(MultisampleState::default()),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
-                ColorBlendAttachmentState::default(),
+                ColorBlendAttachmentState {
+                    blend: Some(AttachmentBlend {
+                        color_blend_op: BlendOp::Add,
+                        src_color_blend_factor: BlendFactor::One,
+                        dst_color_blend_factor: BlendFactor::One,
+                        alpha_blend_op: BlendOp::Max,
+                        src_alpha_blend_factor: BlendFactor::One,
+                        dst_alpha_blend_factor: BlendFactor::One,
+                    }),
+                    ..Default::default()
+                },
             )),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(layout)
@@ -302,15 +307,123 @@ pub fn get_lighting_pipeline(
     .unwrap()
 }
 
+/// 构建命令缓冲区
+pub fn get_basic_command_buffers(
+    command_buffer_allocator: &StandardCommandBufferAllocator,
+    queue: &Arc<Queue>,
+    deferred_pipeline: &Arc<GraphicsPipeline>,
+    framebuffers: &[Arc<Framebuffer>],
+    vertex_buffer: &Subbuffer<[MyVertex]>,
+    deferred_set: &Arc<PersistentDescriptorSet>,
+    viewport: Viewport,
+) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
+    framebuffers
+        .iter()
+        .map(|framebuffer| {
+            let mut builder = AutoCommandBufferBuilder::primary(
+                command_buffer_allocator,
+                queue.queue_family_index(),
+                CommandBufferUsage::MultipleSubmit,
+            )
+            .unwrap();
+
+            builder
+                .begin_render_pass(
+                    RenderPassBeginInfo {
+                        clear_values: vec![
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some(1.0.into()),
+                        ],
+                        ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                    },
+                    SubpassBeginInfo {
+                        contents: SubpassContents::Inline,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                // TODO: viewport ?
+                .set_viewport(0, [viewport.clone()].into_iter().collect())
+                .unwrap()
+                // deferred pipeline - subpass 1
+                .bind_pipeline_graphics(deferred_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    pipeline::PipelineBindPoint::Graphics,
+                    deferred_pipeline.layout().clone(),
+                    0,
+                    deferred_set.clone(),
+                )
+                .unwrap()
+                .bind_vertex_buffers(0, vertex_buffer.clone())
+                .unwrap()
+                .draw(vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap()
+                .next_subpass(
+                    Default::default(),
+                    SubpassBeginInfo {
+                        contents: SubpassContents::Inline,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            builder
+        })
+        .collect()
+}
+pub fn append_light_command(
+    builders: Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>,
+    vertex_buffer: &Subbuffer<[MyVertex]>,
+    light_pipeline: &Arc<GraphicsPipeline>,
+    light_set: &Arc<PersistentDescriptorSet>,
+) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
+    builders
+        .into_iter()
+        .map(|mut builder| {
+            builder
+                .bind_pipeline_graphics(light_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    pipeline::PipelineBindPoint::Graphics,
+                    light_pipeline.layout().clone(),
+                    0,
+                    light_set.clone(),
+                )
+                .unwrap()
+                .draw(vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap();
+            builder
+        })
+        .collect()
+}
+
+pub fn end_render_pass(
+    builders: Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>,
+) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
+    builders
+        .into_iter()
+        .map(|mut builder| {
+            builder.end_render_pass(Default::default()).unwrap();
+            builder.build().unwrap()
+        })
+        .collect()
+}
+
+/// 构建命令缓冲区
+#[allow(unused)]
 pub fn get_command_buffers(
     command_buffer_allocator: &StandardCommandBufferAllocator,
     queue: &Arc<Queue>,
     deferred_pipeline: &Arc<GraphicsPipeline>,
-    lighting_pipeline: &Arc<GraphicsPipeline>,
+    first_light_pipeline: &Arc<GraphicsPipeline>,
+    second_light_pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
     vertex_buffer: &Subbuffer<[MyVertex]>,
     deferred_set: &Arc<PersistentDescriptorSet>,
-    lighting_set: &Arc<PersistentDescriptorSet>,
+    first_light_set: &Arc<PersistentDescriptorSet>,
+    second_light_set: &Arc<PersistentDescriptorSet>,
     viewport: Viewport,
 ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
     framebuffers
@@ -327,9 +440,9 @@ pub fn get_command_buffers(
                 .begin_render_pass(
                     RenderPassBeginInfo {
                         clear_values: vec![
-                            Some([0.0, 0.68, 1.0, 1.0].into()),
-                            Some([0.0, 0.68, 1.0, 1.0].into()),
-                            Some([0.0, 0.68, 1.0, 1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                            Some([0.0, 0.0, 0.0, 1.0].into()),
                             Some(1.0.into()),
                         ],
                         ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
@@ -343,6 +456,7 @@ pub fn get_command_buffers(
                 // TODO: viewport ?
                 .set_viewport(0, [viewport.clone()].into_iter().collect())
                 .unwrap()
+                // deferred pipeline - subpass 1
                 .bind_pipeline_graphics(deferred_pipeline.clone())
                 .unwrap()
                 .bind_descriptor_sets(
@@ -364,17 +478,31 @@ pub fn get_command_buffers(
                     },
                 )
                 .unwrap()
-                .bind_pipeline_graphics(lighting_pipeline.clone())
+                // directional light pipeline - subpass 2
+                .bind_pipeline_graphics(first_light_pipeline.clone())
                 .unwrap()
                 .bind_descriptor_sets(
                     pipeline::PipelineBindPoint::Graphics,
-                    lighting_pipeline.layout().clone(),
+                    first_light_pipeline.layout().clone(),
                     0,
-                    lighting_set.clone(),
+                    first_light_set.clone(),
                 )
                 .unwrap()
                 .draw(vertex_buffer.len() as u32, 1, 0, 0)
                 .unwrap()
+                // ambient light pipeline -  subpass 2
+                .bind_pipeline_graphics(second_light_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    pipeline::PipelineBindPoint::Graphics,
+                    second_light_pipeline.layout().clone(),
+                    0,
+                    second_light_set.clone(),
+                )
+                .unwrap()
+                .draw(vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap()
+                // end
                 .end_render_pass(Default::default())
                 .unwrap();
 
@@ -391,44 +519,7 @@ pub fn get_deferred_descriptor_set(
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let elapsed = rotation_start.elapsed();
-    let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-    let rotation =
-        Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
-
-    // note: this teapot was meant for OpenGL where the origin is at the lower left
-    //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
-    let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
-    let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-    let view = Matrix4::look_at_rh(
-        Point3::new(0.0, 0.0, 0.1),
-        Point3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-    );
-    let scale = Matrix4::from_scale(0.03);
-
-    let uniform_data = vs::MVP {
-        model: Matrix4::from(rotation).into(),
-        view: (view * scale).into(),
-        projection: proj.into(),
-    };
-    let uniform_buffer = Buffer::from_data(
-        memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::UNIFORM_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        uniform_data,
-    )
-    .expect("failed to create uniform_buffer");
-
-    // let descriptor_set_allocator =
-    //     StandardDescriptorSetAllocator::new(device.clone(), Default::default());
+    let uniform_buffer = get_deferred_buffer(rotation_start, swapchain, &memory_allocator);
     let layout = pipeline.layout().set_layouts().get(0).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
@@ -440,7 +531,8 @@ pub fn get_deferred_descriptor_set(
 }
 
 /// get uniform buffer descriptor set
-pub fn get_lighting_descriptor_set(
+pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
+    light: &T,
     rotation_start: &Instant,
     memory_allocator: Arc<dyn MemoryAllocator>,
     color_buffer: Arc<ImageView>,
@@ -449,10 +541,36 @@ pub fn get_lighting_descriptor_set(
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
+    let uniform_buffer = get_deferred_buffer(rotation_start, swapchain, &memory_allocator);
+
+    let light_buffer = get_light_buffer(light, memory_allocator.clone());
+
+    let layout = pipeline.layout().set_layouts().get(0).unwrap();
+    PersistentDescriptorSet::new(
+        descriptor_set_allocator,
+        layout.clone(),
+        [
+            WriteDescriptorSet::image_view(0, color_buffer),
+            WriteDescriptorSet::image_view(1, normal_buffer),
+            WriteDescriptorSet::buffer(2, uniform_buffer),
+            WriteDescriptorSet::buffer(3, light_buffer),
+        ],
+        [],
+    )
+    .unwrap()
+}
+
+fn get_deferred_buffer(
+    rotation_start: &Instant,
+    swapchain: &Swapchain,
+    memory_allocator: &Arc<dyn MemoryAllocator>,
+) -> Subbuffer<vs::MVP> {
     let elapsed = rotation_start.elapsed();
     let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-    let rotation =
-        Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
+    // let rotation =
+    //     Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
+    let axis = Vector3::new(1.0, 0.5, 0.5).normalize();
+    let rotation = Matrix4::from_axis_angle(axis, Rad(rotation as f32));
 
     // note: this teapot was meant for OpenGL where the origin is at the lower left
     //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
@@ -465,6 +583,8 @@ pub fn get_lighting_descriptor_set(
     );
     let scale = Matrix4::from_scale(0.03);
 
+    let v = Vector3::new(0.0, 0.0, -5.0).normalize();
+    let rotation = Matrix4::from_translation(v) * rotation;
     let uniform_data = vs::MVP {
         model: Matrix4::from(rotation).into(),
         view: (view * scale).into(),
@@ -484,13 +604,15 @@ pub fn get_lighting_descriptor_set(
         uniform_data,
     )
     .expect("failed to create uniform_buffer");
+    uniform_buffer
+}
 
-    // 环境光
-    let ambient_light = AmbientLight {
-        color: [1.0; 3],
-        intensity: 0.2,
-    };
-    let ambient_buffer = Buffer::from_data(
+/// 获取一个 light buffer
+pub fn get_light_buffer<T: BufferContents + Clone>(
+    light: &T,
+    memory_allocator: Arc<dyn MemoryAllocator>,
+) -> Subbuffer<T> {
+    Buffer::from_data(
         memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::UNIFORM_BUFFER,
@@ -501,44 +623,7 @@ pub fn get_lighting_descriptor_set(
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        ambient_light.clone(),
+        (*light).clone(),
     )
-    .expect("failed to create ambient buffer");
-
-    // 定向光
-    let directional_light = DirectionalLight {
-        position: [-4.0, -4.0, 0.0],
-        color: [1.0, 1.0, 1.0],
-    };
-    let directional_buffer = Buffer::from_data(
-        memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::UNIFORM_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        directional_light.clone(),
-    )
-    .expect("failed to create directional light buffer");
-
-    // let descriptor_set_allocator =
-    // StandardDescriptorSetAllocator::new(device.clone(), Default::default());
-    let layout = pipeline.layout().set_layouts().get(0).unwrap();
-    PersistentDescriptorSet::new(
-        descriptor_set_allocator,
-        layout.clone(),
-        [
-            WriteDescriptorSet::image_view(0, color_buffer),
-            WriteDescriptorSet::image_view(1, normal_buffer),
-            WriteDescriptorSet::buffer(2, uniform_buffer),
-            WriteDescriptorSet::buffer(3, ambient_buffer),
-            WriteDescriptorSet::buffer(4, directional_buffer),
-        ],
-        [],
-    )
-    .unwrap()
+    .expect("failed to create a light buffer")
 }
