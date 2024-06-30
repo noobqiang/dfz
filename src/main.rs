@@ -4,10 +4,13 @@
 
 mod basic;
 mod glsl;
-use basic::{AmbientLight, DirectionalLight, MyVertex};
+mod model;
+mod model_loader;
+use basic::{AmbientLight, DirectionalLight, NormalVertex};
 use glsl::{
     ambient_frag, ambient_vert, deferred_frag, deferred_vert, directional_frag, directional_vert,
 };
+use model::ModelBuilder;
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::render_pass::Subpass;
 mod utils;
@@ -104,192 +107,193 @@ fn main() {
 
     let vertices = [
         // front face
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, 1.000000],
             normal: [0.0000, 0.0000, 1.0000],
             color: [1.0, 0.35, 0.137],
         },
         // back face
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, -1.000000],
             normal: [0.0000, 0.0000, -1.0000],
             color: [1.0, 0.35, 0.137],
         },
         // top face
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, 1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, 1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, -1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, 1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, -1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, -1.000000],
             normal: [0.0000, -1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
         // bottom face
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, 1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, 1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, -1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, 1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, -1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, -1.000000],
             normal: [0.0000, 1.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
         // left face
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, -1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, -1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, 1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, -1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, 1.000000, 1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [-1.000000, -1.000000, 1.000000],
             normal: [-1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
         // right face
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, 1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, 1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, -1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, 1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, 1.000000, -1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
-        MyVertex {
+        NormalVertex {
             position: [1.000000, -1.000000, -1.000000],
             normal: [1.0000, 0.0000, 0.0000],
             color: [1.0, 0.35, 0.137],
         },
     ];
+    let model = ModelBuilder::new("resource/models/warcraft.obj").build();
     let vertex_buffer = Buffer::from_iter(
         memory_allocator.clone(),
         BufferCreateInfo {
@@ -301,7 +305,8 @@ fn main() {
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        vertices.clone(),
+        // vertices.clone(),
+        model.data().iter().cloned(),
     )
     .unwrap();
 

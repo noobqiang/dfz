@@ -36,7 +36,7 @@ use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpa
 use vulkano::shader::EntryPoint;
 use vulkano::swapchain::{Surface, Swapchain};
 
-use crate::basic::MyVertex;
+use crate::basic::NormalVertex;
 use crate::glsl::vs;
 
 pub fn select_physical_device(
@@ -195,7 +195,7 @@ pub fn get_deferred_pipeline(
     fs: EntryPoint,
     viewport: Viewport,
 ) -> Arc<GraphicsPipeline> {
-    let vertex_input_state = MyVertex::per_vertex()
+    let vertex_input_state = NormalVertex::per_vertex()
         .definition(&vs.info().input_interface)
         .unwrap();
 
@@ -252,7 +252,7 @@ pub fn get_lighting_pipeline(
     fs: EntryPoint,
     viewport: Viewport,
 ) -> Arc<GraphicsPipeline> {
-    let vertex_input_state = MyVertex::per_vertex()
+    let vertex_input_state = NormalVertex::per_vertex()
         .definition(&vs.info().input_interface)
         .unwrap();
 
@@ -313,7 +313,7 @@ pub fn get_basic_command_buffers(
     queue: &Arc<Queue>,
     deferred_pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
-    vertex_buffer: &Subbuffer<[MyVertex]>,
+    vertex_buffer: &Subbuffer<[NormalVertex]>,
     deferred_set: &Arc<PersistentDescriptorSet>,
     viewport: Viewport,
 ) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
@@ -375,7 +375,7 @@ pub fn get_basic_command_buffers(
 }
 pub fn append_light_command(
     builders: Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>,
-    vertex_buffer: &Subbuffer<[MyVertex]>,
+    vertex_buffer: &Subbuffer<[NormalVertex]>,
     light_pipeline: &Arc<GraphicsPipeline>,
     light_set: &Arc<PersistentDescriptorSet>,
 ) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
@@ -420,7 +420,7 @@ pub fn get_command_buffers(
     first_light_pipeline: &Arc<GraphicsPipeline>,
     second_light_pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
-    vertex_buffer: &Subbuffer<[MyVertex]>,
+    vertex_buffer: &Subbuffer<[NormalVertex]>,
     deferred_set: &Arc<PersistentDescriptorSet>,
     first_light_set: &Arc<PersistentDescriptorSet>,
     second_light_set: &Arc<PersistentDescriptorSet>,
@@ -567,9 +567,10 @@ fn get_deferred_buffer(
 ) -> Subbuffer<vs::MVP> {
     let elapsed = rotation_start.elapsed();
     let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
+    let rotation = 30;
     // let rotation =
     //     Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
-    let axis = Vector3::new(1.0, 0.5, 0.5).normalize();
+    let axis = Vector3::new(1.0, 0.0, 0.0).normalize();
     let rotation = Matrix4::from_axis_angle(axis, Rad(rotation as f32));
 
     // note: this teapot was meant for OpenGL where the origin is at the lower left

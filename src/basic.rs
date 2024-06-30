@@ -22,7 +22,7 @@ pub struct DirectionalLight {
 
 #[derive(BufferContents, Vertex, Clone)]
 #[repr(C)]
-pub struct MyVertex {
+pub struct NormalVertex {
     #[format(R32G32B32_SFLOAT)]
     pub position: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
