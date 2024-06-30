@@ -20,7 +20,7 @@ impl ModelBuilder {
     pub fn new(file: &str) -> ModelBuilder {
         ModelBuilder {
             file_name: file.to_string(),
-            custom_color: [1.0, 0.35, 0.137],
+            custom_color: [1.0, 1.0, 1.0],
             invert: true,
         }
     }

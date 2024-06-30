@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
 use std::sync::Arc;
 use std::time::Instant;
@@ -38,6 +40,7 @@ use vulkano::swapchain::{Surface, Swapchain};
 
 use crate::basic::NormalVertex;
 use crate::glsl::vs;
+use crate::model_loader::DummyVertex;
 
 pub fn select_physical_device(
     instance: &Arc<Instance>,
@@ -307,6 +310,68 @@ pub fn get_lighting_pipeline(
     .unwrap()
 }
 
+pub fn get_dummy_pipeline(
+    device: Arc<Device>,
+    subpass: Subpass,
+    vs: EntryPoint,
+    fs: EntryPoint,
+    viewport: Viewport,
+) -> Arc<GraphicsPipeline> {
+    let vertex_input_state = DummyVertex::per_vertex()
+        .definition(&vs.info().input_interface)
+        .unwrap();
+
+    let stages = [
+        PipelineShaderStageCreateInfo::new(vs),
+        PipelineShaderStageCreateInfo::new(fs),
+    ];
+
+    let layout = PipelineLayout::new(
+        device.clone(),
+        PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+            .into_pipeline_layout_create_info(device.clone())
+            .unwrap(),
+    )
+    .unwrap();
+
+    GraphicsPipeline::new(
+        device.clone(),
+        None,
+        GraphicsPipelineCreateInfo {
+            stages: stages.into_iter().collect(),
+            vertex_input_state: Some(vertex_input_state),
+            input_assembly_state: Some(InputAssemblyState::default()),
+            viewport_state: Some(ViewportState {
+                viewports: [viewport].into_iter().collect(),
+                ..Default::default()
+            }),
+            rasterization_state: Some(RasterizationState {
+                cull_mode: CullMode::Back,
+                front_face: FrontFace::CounterClockwise,
+                ..Default::default()
+            }),
+            multisample_state: Some(MultisampleState::default()),
+            color_blend_state: Some(ColorBlendState::with_attachment_states(
+                subpass.num_color_attachments(),
+                ColorBlendAttachmentState {
+                    blend: Some(AttachmentBlend {
+                        color_blend_op: BlendOp::Add,
+                        src_color_blend_factor: BlendFactor::One,
+                        dst_color_blend_factor: BlendFactor::One,
+                        alpha_blend_op: BlendOp::Max,
+                        src_alpha_blend_factor: BlendFactor::One,
+                        dst_alpha_blend_factor: BlendFactor::One,
+                    }),
+                    ..Default::default()
+                },
+            )),
+            subpass: Some(subpass.into()),
+            ..GraphicsPipelineCreateInfo::layout(layout)
+        },
+    )
+    .unwrap()
+}
+
 /// 构建命令缓冲区
 pub fn get_basic_command_buffers(
     command_buffer_allocator: &StandardCommandBufferAllocator,
@@ -391,6 +456,34 @@ pub fn append_light_command(
                     0,
                     light_set.clone(),
                 )
+                .unwrap()
+                .draw(vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap();
+            builder
+        })
+        .collect()
+}
+
+pub fn append_dummy_command(
+    builders: Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>,
+    vertex_buffer: &Subbuffer<[DummyVertex]>,
+    light_pipeline: &Arc<GraphicsPipeline>,
+    light_set: &Arc<PersistentDescriptorSet>,
+) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
+    builders
+        .into_iter()
+        .map(|mut builder| {
+            builder
+                .bind_pipeline_graphics(light_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    pipeline::PipelineBindPoint::Graphics,
+                    light_pipeline.layout().clone(),
+                    0,
+                    light_set.clone(),
+                )
+                .unwrap()
+                .bind_vertex_buffers(0, vertex_buffer.clone())
                 .unwrap()
                 .draw(vertex_buffer.len() as u32, 1, 0, 0)
                 .unwrap();
@@ -560,6 +653,30 @@ pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
     .unwrap()
 }
 
+pub fn get_dummy_descriptor_set<T: BufferContents + Clone>(
+    light: &T,
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    color_buffer: Arc<ImageView>,
+    normal_buffer: Arc<ImageView>,
+    pipeline: &Arc<GraphicsPipeline>,
+    descriptor_set_allocator: &StandardDescriptorSetAllocator,
+) -> Arc<PersistentDescriptorSet> {
+    let light_buffer = get_light_buffer(light, memory_allocator.clone());
+
+    let layout = pipeline.layout().set_layouts().get(0).unwrap();
+    PersistentDescriptorSet::new(
+        descriptor_set_allocator,
+        layout.clone(),
+        [
+            WriteDescriptorSet::image_view(0, color_buffer),
+            WriteDescriptorSet::image_view(1, normal_buffer),
+            WriteDescriptorSet::buffer(2, light_buffer),
+        ],
+        [],
+    )
+    .unwrap()
+}
+
 fn get_deferred_buffer(
     rotation_start: &Instant,
     swapchain: &Swapchain,
@@ -567,10 +684,10 @@ fn get_deferred_buffer(
 ) -> Subbuffer<vs::MVP> {
     let elapsed = rotation_start.elapsed();
     let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-    let rotation = 30;
+    // let rotation = 30;
     // let rotation =
     //     Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
-    let axis = Vector3::new(1.0, 0.0, 0.0).normalize();
+    let axis = Vector3::new(0.0, 1.0, 1.0).normalize();
     let rotation = Matrix4::from_axis_angle(axis, Rad(rotation as f32));
 
     // note: this teapot was meant for OpenGL where the origin is at the lower left
@@ -584,7 +701,7 @@ fn get_deferred_buffer(
     );
     let scale = Matrix4::from_scale(0.03);
 
-    let v = Vector3::new(0.0, 0.0, -5.0).normalize();
+    let v = Vector3::new(0.0, 0.0, -50.0).normalize();
     let rotation = Matrix4::from_translation(v) * rotation;
     let uniform_data = vs::MVP {
         model: Matrix4::from(rotation).into(),
