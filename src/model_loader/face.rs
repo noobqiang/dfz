@@ -2,7 +2,7 @@
 // Licensed under the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>
 
-use std::fmt;
+use std::{fmt, ops::Deref};
 
 pub struct RawFace {
     pub verts: [usize; 3],
@@ -27,9 +27,9 @@ impl RawFace {
         let f1: Vec<&str> = inpt.get(0).unwrap().split("/").collect();
         let f2: Vec<&str> = inpt.get(1).unwrap().split("/").collect();
         let f3: Vec<&str> = inpt.get(2).unwrap().split("/").collect();
-        let a1 = f1.get(index).unwrap().clone();
-        let a2 = f2.get(index).unwrap().clone();
-        let a3 = f3.get(index).unwrap().clone();
+        let a1: &str = f1.get(index).unwrap();
+        let a2: &str = f2.get(index).unwrap();
+        let a3: &str = f3.get(index).unwrap();
         match a1 {
             "" => None,
             _ => {

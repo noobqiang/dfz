@@ -11,7 +11,9 @@ use vulkano::command_buffer::{
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
-use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
+use vulkano::device::physical::{
+    PhysicalDevice, PhysicalDeviceType, RayTracingInvocationReorderMode,
+};
 use vulkano::device::{Device, DeviceExtensions, Queue, QueueFlags};
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
@@ -682,14 +684,6 @@ fn get_deferred_buffer(
     swapchain: &Swapchain,
     memory_allocator: &Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<vs::MVP> {
-    let elapsed = rotation_start.elapsed();
-    let rotation = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-    // let rotation = 30;
-    // let rotation =
-    //     Matrix3::from_angle_y(Rad(rotation as f32)) * Matrix3::from_angle_z(Rad(rotation as f32));
-    let axis = Vector3::new(0.0, 1.0, 1.0).normalize();
-    let rotation = Matrix4::from_axis_angle(axis, Rad(rotation as f32));
-
     // note: this teapot was meant for OpenGL where the origin is at the lower left
     //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
     let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
@@ -701,10 +695,21 @@ fn get_deferred_buffer(
     );
     let scale = Matrix4::from_scale(0.03);
 
-    let v = Vector3::new(0.0, 0.0, -50.0).normalize();
-    let rotation = Matrix4::from_translation(v) * rotation;
+    let elapsed = rotation_start.elapsed();
+    let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
+    let axis = Vector3::new(-1.0, 1.0, -1.0).normalize();
+
+    let v = Vector3::new(0.0, 0.0, -10.0).normalize();
+    let translation = Matrix4::from_translation(v);
+    let rotation_x = Matrix4::from_angle_x(Rad(2.14));
+    let rotation_y = Matrix4::from_angle_y(Rad(0.0));
+    let rotation_z = Matrix4::from_angle_z(Rad(-1.3));
+    let rotation = rotation_z * rotation_y * rotation_x;
+    let rotation = Matrix4::from_axis_angle(axis, Rad(rotation_rad as f32)) * rotation;
+    let model_scale = Matrix4::from_scale(0.5);
+    let model = translation * rotation * model_scale;
     let uniform_data = vs::MVP {
-        model: Matrix4::from(rotation).into(),
+        model: Matrix4::from(model).into(),
         view: (view * scale).into(),
         projection: proj.into(),
     };
