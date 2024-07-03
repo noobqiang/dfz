@@ -124,7 +124,7 @@ pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<Re
 pub fn get_framebuffers(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,
-    memory_allocator: Arc<StandardMemoryAllocator>,
+    memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> (Vec<Arc<Framebuffer>>, Arc<ImageView>, Arc<ImageView>) {
     let depth_buffer = ImageView::new_default(
         Image::new(
@@ -612,13 +612,12 @@ pub fn get_command_buffers(
 
 /// get uniform buffer descriptor set
 pub fn get_vp_descriptor_set(
-    rotation_start: &Instant,
     memory_allocator: Arc<dyn MemoryAllocator>,
     swapchain: &Swapchain,
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let vp_buffer = get_vp_buffer(rotation_start, swapchain, &memory_allocator);
+    let vp_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
     let layout = pipeline.layout().set_layouts().get(0).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
@@ -637,7 +636,7 @@ pub fn get_model_descriptor_set(
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let model_buffer = get_model_buffer(rotation_start, model, &memory_allocator);
+    let model_buffer = get_model_buffer(rotation_start, model, memory_allocator.clone());
     let layout = pipeline.layout().set_layouts().get(1).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
@@ -651,7 +650,6 @@ pub fn get_model_descriptor_set(
 /// get uniform buffer descriptor set
 pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
     light: &T,
-    rotation_start: &Instant,
     memory_allocator: Arc<dyn MemoryAllocator>,
     color_buffer: Arc<ImageView>,
     normal_buffer: Arc<ImageView>,
@@ -659,7 +657,7 @@ pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let uniform_buffer = get_vp_buffer(rotation_start, swapchain, &memory_allocator);
+    let uniform_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
 
     let light_buffer = get_light_buffer(light, memory_allocator.clone());
 
@@ -702,10 +700,10 @@ pub fn get_dummy_descriptor_set<T: BufferContents + Clone>(
     .unwrap()
 }
 
-fn get_vp_buffer(
-    rotation_start: &Instant,
+pub fn get_vp_buffer(
     swapchain: &Swapchain,
-    memory_allocator: &Arc<dyn MemoryAllocator>,
+    // TOOD: 这里如果使用 &Arc<dyn MemoryAllocator> 在 system.rs 那边会报错
+    memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<VP> {
     let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
     let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
@@ -736,10 +734,10 @@ fn get_vp_buffer(
     vp_buffer
 }
 
-fn get_model_buffer(
+pub fn get_model_buffer(
     rotation_start: &Instant,
     model: &mut Model,
-    memory_allocator: &Arc<dyn MemoryAllocator>,
+    memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<deferred_vert::Model_Data> {
     let elapsed = rotation_start.elapsed();
     let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;

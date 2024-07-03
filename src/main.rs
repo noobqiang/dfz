@@ -6,6 +6,7 @@ mod basic;
 mod glsl;
 mod model;
 mod model_loader;
+mod system;
 use basic::{AmbientLight, DirectionalLight, NormalVertex};
 use cgmath::{InnerSpace, Vector3};
 use glsl::{
@@ -238,7 +239,6 @@ fn main() {
         StandardDescriptorSetAllocator::new(device.clone(), Default::default());
 
     let mut vp_set = get_vp_descriptor_set(
-        &rotation_start,
         memory_allocator.clone(),
         &swapchain,
         &deferred_pipeline,
@@ -307,7 +307,6 @@ fn main() {
 
                 // view projection matrix buffer only need to be recreated when swapchain is recreated
                 vp_set = get_vp_descriptor_set(
-                    &rotation_start,
                     memory_allocator.clone(),
                     &swapchain,
                     &deferred_pipeline,
