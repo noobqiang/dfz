@@ -739,12 +739,12 @@ pub fn get_model_buffer(
     model: &mut Model,
     memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<deferred_vert::Model_Data> {
-    let elapsed = rotation_start.elapsed();
-    let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
+    // let elapsed = rotation_start.elapsed();
+    // let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
 
-    model.rotate_zero();
-    model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 1.57);
-    model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
+    // model.rotate_zero();
+    // model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 1.57);
+    // model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
 
     let (model_mat, normal_mat) = model.model_matrices();
     let model_buffer = Buffer::from_data(
