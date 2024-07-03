@@ -7,6 +7,7 @@ mod glsl;
 mod model;
 mod model_loader;
 use basic::{AmbientLight, DirectionalLight, NormalVertex};
+use cgmath::{InnerSpace, Vector3};
 use glsl::{
     ambient_frag, ambient_vert, deferred_frag, deferred_vert, directional_frag, directional_vert,
 };
@@ -105,7 +106,12 @@ fn main() {
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
     let (mut framebuffers, mut color_buffer, mut normal_buffer) =
         get_framebuffers(&images, render_pass.clone(), memory_allocator.clone());
-    let model = ModelBuilder::new("resource/models/warcraft.obj").build();
+
+    // 加载模型
+    let mut model = ModelBuilder::new("resource/models/warcraft.obj").build();
+    model.scale(0.5);
+    model.translate(Vector3::new(0.0, 0.0, -10.0).normalize());
+
     let vertex_buffer = Buffer::from_iter(
         memory_allocator.clone(),
         BufferCreateInfo {
@@ -231,6 +237,14 @@ fn main() {
     let descriptor_set_allocator =
         StandardDescriptorSetAllocator::new(device.clone(), Default::default());
 
+    let mut vp_set = get_vp_descriptor_set(
+        &rotation_start,
+        memory_allocator.clone(),
+        &swapchain,
+        &deferred_pipeline,
+        &descriptor_set_allocator,
+    );
+
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
@@ -291,12 +305,22 @@ fn main() {
                 }
                 swapchain = new_swapchain;
 
+                // view projection matrix buffer only need to be recreated when swapchain is recreated
+                vp_set = get_vp_descriptor_set(
+                    &rotation_start,
+                    memory_allocator.clone(),
+                    &swapchain,
+                    &deferred_pipeline,
+                    &descriptor_set_allocator,
+                );
+
                 // size 变化时这些变量也需要随之更新
                 (framebuffers, color_buffer, normal_buffer) =
                     get_framebuffers(&new_images, render_pass.clone(), memory_allocator.clone());
             }
 
-            let deferred_set = get_deferred_descriptor_set(
+            let model_set = get_model_descriptor_set(
+                &mut model,
                 &rotation_start,
                 memory_allocator.clone(),
                 &swapchain,
@@ -350,7 +374,8 @@ fn main() {
                 &deferred_pipeline,
                 &framebuffers,
                 &vertex_buffer,
-                &deferred_set,
+                &vp_set,
+                &model_set,
                 viewport.clone(),
             );
             temp_builder = append_dummy_command(

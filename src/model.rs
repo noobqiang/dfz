@@ -1,5 +1,5 @@
 #![allow(unused)]
-use cgmath::{BaseFloat, Matrix4, One, Rad, SquareMatrix, Vector3};
+use cgmath::{BaseFloat, Matrix4, One, Rad, SquareMatrix, Transform, Vector3};
 
 use super::model_loader::Loader;
 use crate::basic::NormalVertex;
@@ -8,6 +8,10 @@ pub struct Model {
     data: Vec<NormalVertex>,
     translation: Matrix4<f32>,
     rotation: Matrix4<f32>,
+    model: Matrix4<f32>,
+    normals: Matrix4<f32>,
+    require_update: bool,
+    scale: Matrix4<f32>,
 }
 
 pub struct ModelBuilder {
@@ -41,6 +45,10 @@ impl ModelBuilder {
             data: loader.as_normal_vertices(),
             translation: Matrix4::identity(),
             rotation: Matrix4::identity(),
+            model: Matrix4::identity(),
+            normals: Matrix4::identity(),
+            require_update: true,
+            scale: Matrix4::identity(),
         }
     }
 }
@@ -52,13 +60,31 @@ impl Model {
 
     pub fn translate(&mut self, v: Vector3<f32>) {
         self.translation += Matrix4::from_translation(v);
+        self.require_update = true;
     }
 
     pub fn rotate(&mut self, axis: Vector3<f32>, radians: f32) {
-        self.rotation = self.rotation * Matrix4::from_axis_angle(axis, Rad(radians));
+        self.rotation = Matrix4::from_axis_angle(axis, Rad(radians)) * self.rotation;
+        self.require_update = true;
+    }
+
+    pub fn scale(&mut self, scale: f32) {
+        self.scale = Matrix4::from_scale(scale) * self.scale;
+        self.require_update = true;
     }
 
     pub fn rotate_zero(&mut self) {
         self.rotation = Matrix4::identity();
+        self.require_update = true;
+    }
+
+    pub fn model_matrices(&mut self) -> (Matrix4<f32>, Matrix4<f32>) {
+        if self.require_update {
+            self.model = self.translation * self.rotation * self.scale;
+            self.normals = Matrix4::inverse_transform(&self.model).unwrap();
+            self.normals.transpose_self();
+            self.require_update = false;
+        }
+        (self.model, self.normals)
     }
 }

@@ -3,7 +3,9 @@
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
 use std::sync::Arc;
 use std::time::Instant;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{
+    subbuffer, Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer,
+};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo,
@@ -32,7 +34,7 @@ use vulkano::pipeline::graphics::rasterization::{CullMode, FrontFace, Rasterizat
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
+use vulkano::pipeline::layout::{self, PipelineDescriptorSetLayoutCreateInfo};
 use vulkano::pipeline::{
     self, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo,
 };
@@ -40,8 +42,9 @@ use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpa
 use vulkano::shader::EntryPoint;
 use vulkano::swapchain::{Surface, Swapchain};
 
-use crate::basic::NormalVertex;
-use crate::glsl::vs;
+use crate::basic::{NormalVertex, VP};
+use crate::glsl::{deferred_vert, vs};
+use crate::model::Model;
 use crate::model_loader::DummyVertex;
 
 pub fn select_physical_device(
@@ -381,7 +384,8 @@ pub fn get_basic_command_buffers(
     deferred_pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
     vertex_buffer: &Subbuffer<[NormalVertex]>,
-    deferred_set: &Arc<PersistentDescriptorSet>,
+    vp_set: &Arc<PersistentDescriptorSet>,
+    model_set: &Arc<PersistentDescriptorSet>,
     viewport: Viewport,
 ) -> Vec<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>> {
     framebuffers
@@ -421,7 +425,7 @@ pub fn get_basic_command_buffers(
                     pipeline::PipelineBindPoint::Graphics,
                     deferred_pipeline.layout().clone(),
                     0,
-                    deferred_set.clone(),
+                    (vp_set.clone(), model_set.clone()),
                 )
                 .unwrap()
                 .bind_vertex_buffers(0, vertex_buffer.clone())
@@ -607,19 +611,38 @@ pub fn get_command_buffers(
 }
 
 /// get uniform buffer descriptor set
-pub fn get_deferred_descriptor_set(
+pub fn get_vp_descriptor_set(
     rotation_start: &Instant,
     memory_allocator: Arc<dyn MemoryAllocator>,
     swapchain: &Swapchain,
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let uniform_buffer = get_deferred_buffer(rotation_start, swapchain, &memory_allocator);
+    let vp_buffer = get_vp_buffer(rotation_start, swapchain, &memory_allocator);
     let layout = pipeline.layout().set_layouts().get(0).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
         layout.clone(),
-        [WriteDescriptorSet::buffer(0, uniform_buffer)],
+        [WriteDescriptorSet::buffer(0, vp_buffer)],
+        [],
+    )
+    .unwrap()
+}
+
+pub fn get_model_descriptor_set(
+    model: &mut Model,
+    rotation_start: &Instant,
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    swapchain: &Swapchain,
+    pipeline: &Arc<GraphicsPipeline>,
+    descriptor_set_allocator: &StandardDescriptorSetAllocator,
+) -> Arc<PersistentDescriptorSet> {
+    let model_buffer = get_model_buffer(rotation_start, model, &memory_allocator);
+    let layout = pipeline.layout().set_layouts().get(1).unwrap();
+    PersistentDescriptorSet::new(
+        descriptor_set_allocator,
+        layout.clone(),
+        [WriteDescriptorSet::buffer(0, model_buffer)],
         [],
     )
     .unwrap()
@@ -636,7 +659,7 @@ pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let uniform_buffer = get_deferred_buffer(rotation_start, swapchain, &memory_allocator);
+    let uniform_buffer = get_vp_buffer(rotation_start, swapchain, &memory_allocator);
 
     let light_buffer = get_light_buffer(light, memory_allocator.clone());
 
@@ -679,13 +702,11 @@ pub fn get_dummy_descriptor_set<T: BufferContents + Clone>(
     .unwrap()
 }
 
-fn get_deferred_buffer(
+fn get_vp_buffer(
     rotation_start: &Instant,
     swapchain: &Swapchain,
     memory_allocator: &Arc<dyn MemoryAllocator>,
-) -> Subbuffer<vs::MVP> {
-    // note: this teapot was meant for OpenGL where the origin is at the lower left
-    //       instead the origin is at the upper left in Vulkan, so we reverse the Y axis
+) -> Subbuffer<VP> {
     let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
     let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
     let view = Matrix4::look_at_rh(
@@ -694,26 +715,11 @@ fn get_deferred_buffer(
         Vector3::new(0.0, 1.0, 0.0),
     );
     let scale = Matrix4::from_scale(0.03);
-
-    let elapsed = rotation_start.elapsed();
-    let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-    let axis = Vector3::new(-1.0, 1.0, -1.0).normalize();
-
-    let v = Vector3::new(0.0, 0.0, -10.0).normalize();
-    let translation = Matrix4::from_translation(v);
-    let rotation_x = Matrix4::from_angle_x(Rad(2.14));
-    let rotation_y = Matrix4::from_angle_y(Rad(0.0));
-    let rotation_z = Matrix4::from_angle_z(Rad(-1.3));
-    let rotation = rotation_z * rotation_y * rotation_x;
-    let rotation = Matrix4::from_axis_angle(axis, Rad(rotation_rad as f32)) * rotation;
-    let model_scale = Matrix4::from_scale(0.5);
-    let model = translation * rotation * model_scale;
-    let uniform_data = vs::MVP {
-        model: Matrix4::from(model).into(),
+    let vp_data = VP {
         view: (view * scale).into(),
         projection: proj.into(),
     };
-    let uniform_buffer = Buffer::from_data(
+    let vp_buffer = Buffer::from_data(
         memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::UNIFORM_BUFFER,
@@ -724,10 +730,43 @@ fn get_deferred_buffer(
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        uniform_data,
+        vp_data,
     )
     .expect("failed to create uniform_buffer");
-    uniform_buffer
+    vp_buffer
+}
+
+fn get_model_buffer(
+    rotation_start: &Instant,
+    model: &mut Model,
+    memory_allocator: &Arc<dyn MemoryAllocator>,
+) -> Subbuffer<deferred_vert::Model_Data> {
+    let elapsed = rotation_start.elapsed();
+    let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
+
+    model.rotate_zero();
+    model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 1.57);
+    model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
+
+    let (model_mat, normal_mat) = model.model_matrices();
+    let model_buffer = Buffer::from_data(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::UNIFORM_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        deferred_vert::Model_Data {
+            model: model_mat.into(),
+            normals: normal_mat.into(),
+        },
+    )
+    .expect("failed to create uniform_buffer");
+    model_buffer
 }
 
 /// 获取一个 light buffer
