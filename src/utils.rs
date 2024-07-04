@@ -630,13 +630,12 @@ pub fn get_vp_descriptor_set(
 
 pub fn get_model_descriptor_set(
     model: &mut Model,
-    rotation_start: &Instant,
     memory_allocator: Arc<dyn MemoryAllocator>,
     swapchain: &Swapchain,
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let model_buffer = get_model_buffer(rotation_start, model, memory_allocator.clone());
+    let model_buffer = get_model_buffer(model, memory_allocator.clone());
     let layout = pipeline.layout().set_layouts().get(1).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
@@ -735,17 +734,9 @@ pub fn get_vp_buffer(
 }
 
 pub fn get_model_buffer(
-    rotation_start: &Instant,
     model: &mut Model,
     memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<deferred_vert::Model_Data> {
-    // let elapsed = rotation_start.elapsed();
-    // let rotation_rad = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
-
-    // model.rotate_zero();
-    // model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 1.57);
-    // model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
-
     let (model_mat, normal_mat) = model.model_matrices();
     let model_buffer = Buffer::from_data(
         memory_allocator.clone(),

@@ -19,7 +19,6 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
-    // let library = vulkano::VulkanLibrary::new().expect("no local Vulkan library/DLL");
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
@@ -33,18 +32,18 @@ fn main() {
     // 加载模型
     let mut model = ModelBuilder::new("resource/models/warcraft.obj").build();
     model.scale(0.5);
-    model.translate(Vector3::new(0.0, 0.0, -10.0).normalize());
+    model.translate(Vector3::new(0.0, 0.0, -10.0));
 
     let mut teapot_model = ModelBuilder::new("resource/models/teapot.obj").build();
     teapot_model.scale(0.5);
-    // TODO: 平移不起作用
-    teapot_model.translate(Vector3::new(1000.0, 100.0, -10.0).normalize());
+    teapot_model.translate(Vector3::new(20.0, 0.0, -10.0));
 
     // 环境光
     let ambient_light = AmbientLight {
         color: [1.0; 3],
-        intensity: 0.2,
+        intensity: 0.5,
     };
+    system.set_ambient(&ambient_light);
 
     // 定向光
     let directional_light = DirectionalLight {
@@ -94,7 +93,7 @@ fn main() {
                 elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
 
             model.rotate_zero();
-            model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 1.57);
+            model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 5.41);
             model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
 
             system.start();

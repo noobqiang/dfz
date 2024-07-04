@@ -1,4 +1,4 @@
-use std::{mem, sync::Arc, time::Instant};
+use std::{mem, sync::Arc};
 
 use cgmath::{Matrix4, Point3, Rad, Vector3};
 use vulkano::{
@@ -181,8 +181,6 @@ impl System {
 
         // buffers
         let vp_buffer = get_vp_buffer(&swapchain, memory_allocator.clone());
-        // let rotation_start = Instant::now();
-        // let model_buffer = get_model_buffer(rotation_start, model, memory_allocator);
         let ambient_buffer = get_light_buffer(
             &AmbientLight {
                 color: [1.0; 3],
@@ -367,6 +365,8 @@ impl System {
                     ..Default::default()
                 },
             )
+            .unwrap()
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .unwrap();
         self.commands = Some(builder);
         self.image_index = image_i;
@@ -446,11 +446,8 @@ impl System {
                 return;
             }
         }
-        let rotation_start = Instant::now();
-        //let model_buffer = get_model_buffer(&rotation_start, model, self.memory_allocator.clone());
         let model_set = get_model_descriptor_set(
             model,
-            &rotation_start,
             self.memory_allocator.clone(),
             &self.swapchain,
             &self.deferred_pipeline,
@@ -474,8 +471,6 @@ impl System {
         self.commands
             .as_mut()
             .unwrap()
-            // .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-            // .unwrap()
             .bind_pipeline_graphics(self.deferred_pipeline.clone())
             .unwrap()
             .bind_descriptor_sets(
@@ -614,13 +609,13 @@ impl System {
         self.render_stage = RenderStage::NeedsRedraw;
         self.commands = None;
 
-        let window = self
-            .surface
-            .object()
-            .unwrap()
-            .downcast_ref::<Window>()
-            .unwrap();
-        let image_extent: [u32; 2] = window.inner_size().into();
+        // let window = self
+        //     .surface
+        //     .object()
+        //     .unwrap()
+        //     .downcast_ref::<Window>()
+        //     .unwrap();
+        let image_extent: [u32; 2] = self.window.inner_size().into();
 
         // TODO: 作用是什么?
         if image_extent.contains(&0) {
@@ -678,6 +673,7 @@ impl System {
         render_pass: Arc<RenderPass>,
         memory_allocator: Arc<dyn MemoryAllocator>,
     ) -> (Vec<Arc<Framebuffer>>, Arc<ImageView>, Arc<ImageView>) {
+        // pipelines
         let (framebuffers, color_buffer, normal_buffer) =
             get_framebuffers(images, render_pass.clone(), memory_allocator.clone());
         (framebuffers, color_buffer, normal_buffer)
