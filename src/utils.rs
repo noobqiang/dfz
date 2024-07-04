@@ -36,7 +36,7 @@ use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::{self, PipelineDescriptorSetLayoutCreateInfo};
 use vulkano::pipeline::{
-    self, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+    self, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::EntryPoint;
@@ -227,10 +227,7 @@ pub fn get_deferred_pipeline(
             stages: stages.into_iter().collect(),
             vertex_input_state: Some(vertex_input_state),
             input_assembly_state: Some(InputAssemblyState::default()),
-            viewport_state: Some(ViewportState {
-                viewports: [viewport].into_iter().collect(),
-                ..Default::default()
-            }),
+            viewport_state: Some(ViewportState::default()),
             rasterization_state: Some(RasterizationState {
                 cull_mode: CullMode::Back,
                 front_face: FrontFace::CounterClockwise,
@@ -245,6 +242,7 @@ pub fn get_deferred_pipeline(
                 depth: Some(DepthState::simple()),
                 ..Default::default()
             }),
+            dynamic_state: [DynamicState::Viewport].into_iter().collect(),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(layout)
         },
@@ -284,10 +282,7 @@ pub fn get_lighting_pipeline(
             stages: stages.into_iter().collect(),
             vertex_input_state: Some(vertex_input_state),
             input_assembly_state: Some(InputAssemblyState::default()),
-            viewport_state: Some(ViewportState {
-                viewports: [viewport].into_iter().collect(),
-                ..Default::default()
-            }),
+            viewport_state: Some(ViewportState::default()),
             rasterization_state: Some(RasterizationState {
                 cull_mode: CullMode::Back,
                 front_face: FrontFace::CounterClockwise,
@@ -308,6 +303,7 @@ pub fn get_lighting_pipeline(
                     ..Default::default()
                 },
             )),
+            dynamic_state: [DynamicState::Viewport].into_iter().collect(),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(layout)
         },
@@ -346,10 +342,7 @@ pub fn get_dummy_pipeline(
             stages: stages.into_iter().collect(),
             vertex_input_state: Some(vertex_input_state),
             input_assembly_state: Some(InputAssemblyState::default()),
-            viewport_state: Some(ViewportState {
-                viewports: [viewport].into_iter().collect(),
-                ..Default::default()
-            }),
+            viewport_state: Some(ViewportState::default()),
             rasterization_state: Some(RasterizationState {
                 cull_mode: CullMode::Back,
                 front_face: FrontFace::CounterClockwise,
@@ -370,6 +363,7 @@ pub fn get_dummy_pipeline(
                     ..Default::default()
                 },
             )),
+            dynamic_state: [DynamicState::Viewport].into_iter().collect(),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(layout)
         },

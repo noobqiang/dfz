@@ -471,6 +471,8 @@ impl System {
         self.commands
             .as_mut()
             .unwrap()
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
             .bind_pipeline_graphics(self.deferred_pipeline.clone())
             .unwrap()
             .bind_descriptor_sets(
@@ -541,8 +543,8 @@ impl System {
                 ambient_set.clone(),
             )
             .unwrap()
-            // .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-            // .unwrap()
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
             .bind_vertex_buffers(0, self.dummy_buffer.clone())
             .unwrap()
             .draw(self.dummy_buffer.len() as u32, 1, 0, 0)
@@ -597,8 +599,8 @@ impl System {
                 directional_set.clone(),
             )
             .unwrap()
-            // .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-            // .unwrap()
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
             .bind_vertex_buffers(0, self.dummy_buffer.clone())
             .unwrap()
             .draw(self.dummy_buffer.len() as u32, 1, 0, 0)
@@ -641,6 +643,7 @@ impl System {
                 &new_images,
                 self.render_pass.clone(),
                 self.memory_allocator.clone(),
+                &mut self.viewport,
             );
 
         self.swapchain = new_swapchain;
@@ -672,8 +675,10 @@ impl System {
         images: &Vec<Arc<Image>>,
         render_pass: Arc<RenderPass>,
         memory_allocator: Arc<dyn MemoryAllocator>,
+        viewport: &mut Viewport,
     ) -> (Vec<Arc<Framebuffer>>, Arc<ImageView>, Arc<ImageView>) {
-        // pipelines
+        let extent = images[0].extent();
+        viewport.extent = [extent[0] as f32, extent[1] as f32];
         let (framebuffers, color_buffer, normal_buffer) =
             get_framebuffers(images, render_pass.clone(), memory_allocator.clone());
         (framebuffers, color_buffer, normal_buffer)
