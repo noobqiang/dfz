@@ -611,23 +611,6 @@ impl System {
         self.render_stage = RenderStage::NeedsRedraw;
         self.commands = None;
 
-        // let window = self
-        //     .surface
-        //     .object()
-        //     .unwrap()
-        //     .downcast_ref::<Window>()
-        //     .unwrap();
-        let image_extent: [u32; 2] = self.window.inner_size().into();
-
-        // TODO: 作用是什么?
-        if image_extent.contains(&0) {
-            return;
-        }
-        let aspect_ratio =
-            self.swapchain.image_extent()[0] as f32 / self.swapchain.image_extent()[1] as f32;
-        self.vp.projection =
-            cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0).into();
-
         let new_dimensions = self.window.inner_size();
 
         let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {
@@ -650,6 +633,12 @@ impl System {
         self.framebuffers = new_framebuffers;
         self.color_buffer = new_color_buffer;
         self.normal_buffer = new_normal_buffer;
+
+        // 更新投影矩阵
+        let aspect_ratio =
+            self.swapchain.image_extent()[0] as f32 / self.swapchain.image_extent()[1] as f32;
+        self.vp.projection =
+            cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0).into();
 
         self.vp_buffer = get_vp_buffer(&self.swapchain, self.memory_allocator.clone());
 
