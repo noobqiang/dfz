@@ -33,7 +33,8 @@ use winit::{
 use crate::{
     basic::{AmbientLight, DirectionalLight, VP},
     get_deferred_pipeline, get_dummy_pipeline, get_framebuffers, get_light_buffer,
-    get_model_descriptor_set, get_render_pass, get_vp_buffer, get_vp_descriptor_set,
+    get_light_obj_pipeline, get_model_descriptor_set, get_render_pass, get_vp_buffer,
+    get_vp_descriptor_set,
     model::Model,
     model_loader::DummyVertex,
     select_physical_device,
@@ -61,6 +62,7 @@ pub struct System {
     deferred_pipeline: Arc<GraphicsPipeline>,
     ambient_pipeline: Arc<GraphicsPipeline>,
     directional_pipeline: Arc<GraphicsPipeline>,
+    light_obj_pipeline: Arc<GraphicsPipeline>,
 
     framebuffers: Vec<Arc<Framebuffer>>,
     color_buffer: Arc<ImageView>,
@@ -178,6 +180,14 @@ impl System {
             .expect("failed to create shader module")
             .entry_point("main")
             .unwrap();
+        let light_obj_vert = light_obj_vert::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+        let light_obj_frag = light_obj_frag::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
 
         // buffers
         let vp_buffer = get_vp_buffer(&swapchain, memory_allocator.clone());
@@ -229,6 +239,13 @@ impl System {
             lighting_pass.clone(),
             ambient_vert.clone(),
             ambient_frag.clone(),
+            viewport.clone(),
+        );
+        let light_obj_pipeline = get_light_obj_pipeline(
+            device.clone(),
+            lighting_pass.clone(),
+            light_obj_vert.clone(),
+            light_obj_frag.clone(),
             viewport.clone(),
         );
 
@@ -295,6 +312,7 @@ impl System {
             deferred_pipeline,
             ambient_pipeline,
             directional_pipeline,
+            light_obj_pipeline,
             framebuffers,
             color_buffer,
             normal_buffer,
@@ -375,6 +393,7 @@ impl System {
     pub fn finish(&mut self, previous_frame_end: &mut Option<Box<dyn GpuFuture>>) {
         match self.render_stage {
             RenderStage::Directional => {}
+            RenderStage::LightObject => {}
             RenderStage::NeedsRedraw => {
                 self.recreate_swapchain();
                 self.commands = None;
@@ -607,6 +626,70 @@ impl System {
             .unwrap();
     }
 
+    pub fn light_object(&mut self, directional_light: &DirectionalLight, model: &mut Model) {
+        match self.render_stage {
+            RenderStage::Directional => {
+                self.render_stage = RenderStage::LightObject;
+            }
+            RenderStage::LightObject => {}
+            RenderStage::NeedsRedraw => {
+                self.recreate_swapchain();
+                self.render_stage = RenderStage::Stopped;
+                self.commands = None;
+                return;
+            }
+            _ => {
+                self.render_stage = RenderStage::Stopped;
+                self.commands = None;
+                return;
+            }
+        }
+
+        model.translate(directional_light.get_position());
+
+        let model_set = get_model_descriptor_set(
+            model,
+            self.memory_allocator.clone(),
+            &self.swapchain,
+            &self.light_obj_pipeline,
+            &self.descriptor_set_allocator,
+        );
+        // buffer
+        let vertex_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            model.color_data().iter().cloned(),
+        )
+        .unwrap();
+
+        self.commands
+            .as_mut()
+            .unwrap()
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
+            .bind_pipeline_graphics(self.light_obj_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                pipeline::PipelineBindPoint::Graphics,
+                self.light_obj_pipeline.layout().clone(),
+                0,
+                (self.vp_set.clone(), model_set.clone()),
+            )
+            .unwrap()
+            .bind_vertex_buffers(0, vertex_buffer.clone())
+            .unwrap()
+            .draw(vertex_buffer.len() as u32, 1, 0, 0)
+            .unwrap();
+    }
+
     pub fn recreate_swapchain(&mut self) {
         self.render_stage = RenderStage::NeedsRedraw;
         self.commands = None;
@@ -715,6 +798,7 @@ enum RenderStage {
     Deferred,
     Ambient,
     Directional,
+    LightObject,
     NeedsRedraw,
 }
 
@@ -761,5 +845,21 @@ mod directional_frag {
     vulkano_shaders::shader! {
         ty: "fragment",
         path: "src/system/shaders/directional.frag",
+    }
+}
+
+///
+mod light_obj_vert {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/system/shaders/light_obj.vert",
+    }
+}
+
+///
+mod light_obj_frag {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/system/shaders/light_obj.frag",
     }
 }

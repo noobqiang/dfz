@@ -11,6 +11,8 @@ use basic::{AmbientLight, DirectionalLight, NormalVertex};
 use cgmath::{InnerSpace, Matrix4, Point3, Vector3};
 use model::ModelBuilder;
 use system::System;
+use vulkano::buffer::sys;
+use winit::dpi::Position;
 mod utils;
 use std::time::Instant;
 use utils::*;
@@ -62,6 +64,14 @@ fn main() {
         position: [4.0, -2.0, 1.0, 1.0],
         color: [0.0, 0.0, 1.0],
     };
+    let directional_light_with_obj = DirectionalLight {
+        position: [-4.0, -4.0, -3.5, 1.0],
+        color: [1.0, 1.0, 1.0],
+    };
+
+    let mut light_obj_model = ModelBuilder::new("resource/models/sphere.obj")
+        .color(directional_light_with_obj.color)
+        .build();
 
     let mut previous_frame_end =
         Some(Box::new(sync::now(system.device.clone())) as Box<dyn GpuFuture>);
@@ -100,10 +110,12 @@ fn main() {
             system.geometry(&mut model);
             system.geometry(&mut teapot_model);
             system.ambient();
-            system.directional(&directional_light);
+            // system.directional(&directional_light);
             system.directional(&directional_light_r);
             system.directional(&directional_light_g);
             system.directional(&directional_light_b);
+            system.directional(&directional_light_with_obj);
+            system.light_object(&directional_light_with_obj, &mut light_obj_model);
             system.finish(&mut previous_frame_end);
         }
         _ => (),

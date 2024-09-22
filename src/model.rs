@@ -2,7 +2,7 @@
 use cgmath::{BaseFloat, Matrix4, One, Rad, SquareMatrix, Transform, Vector3};
 
 use super::model_loader::Loader;
-use crate::basic::NormalVertex;
+use crate::basic::{ColoredVertex, NormalVertex};
 
 pub struct Model {
     data: Vec<NormalVertex>,
@@ -86,5 +86,16 @@ impl Model {
             self.require_update = false;
         }
         (self.model, self.normals)
+    }
+
+    pub fn color_data(&self) -> Vec<ColoredVertex> {
+        let mut ret: Vec<ColoredVertex> = Vec::new();
+        for v in &self.data {
+            ret.push(ColoredVertex {
+                position: v.position,
+                color: v.normal,
+            });
+        }
+        ret
     }
 }
