@@ -113,7 +113,7 @@ pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<Re
             },
             {
                 color: [final_color],
-                depth_stencil: {},
+                depth_stencil: {depth},
                 input: [color, normals]
             }
         ]
@@ -289,11 +289,10 @@ pub fn get_light_obj_pipeline(
                 ..Default::default()
             }),
             multisample_state: Some(MultisampleState::default()),
-            // depth_stencil_state: Some(DepthStencilState {
-            //     depth: Some(DepthState::simple()),
-            //     ..Default::default()
-            // }),
-            depth_stencil_state: None,
+            depth_stencil_state: Some(DepthStencilState {
+                depth: Some(DepthState::simple()),
+                ..Default::default()
+            }),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
                 // ColorBlendAttachmentState::default(),
@@ -409,6 +408,10 @@ pub fn get_dummy_pipeline(
                 ..Default::default()
             }),
             multisample_state: Some(MultisampleState::default()),
+            depth_stencil_state: Some(DepthStencilState {
+                depth: Some(DepthState::default()),
+                ..Default::default()
+            }),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
                 ColorBlendAttachmentState {

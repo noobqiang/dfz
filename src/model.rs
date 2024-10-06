@@ -93,7 +93,7 @@ impl Model {
         for v in &self.data {
             ret.push(ColoredVertex {
                 position: v.position,
-                color: v.normal,
+                color: v.color,
             });
         }
         ret

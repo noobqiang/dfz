@@ -14,10 +14,11 @@ use system::System;
 use vulkano::buffer::sys;
 use winit::dpi::Position;
 mod utils;
+use std::f32::consts::PI;
 use std::time::Instant;
 use utils::*;
 use vulkano::sync::{self, GpuFuture};
-use winit::event::{Event, WindowEvent};
+use winit::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
@@ -34,16 +35,16 @@ fn main() {
     // 加载模型
     let mut model = ModelBuilder::new("resource/models/warcraft.obj").build();
     model.scale(0.5);
-    model.translate(Vector3::new(0.0, 0.0, -10.0));
+    model.translate(Vector3::new(-2.0, 0.0, -10.0));
 
     let mut teapot_model = ModelBuilder::new("resource/models/teapot.obj").build();
-    teapot_model.scale(0.5);
-    teapot_model.translate(Vector3::new(20.0, 0.0, -10.0));
+    teapot_model.scale(0.2);
+    teapot_model.translate(Vector3::new(0.0, 5.0, 0.0));
 
     // 环境光
     let ambient_light = AmbientLight {
         color: [1.0; 3],
-        intensity: 0.5,
+        intensity: 0.2,
     };
     system.set_ambient(&ambient_light);
 
@@ -64,14 +65,9 @@ fn main() {
         position: [4.0, -2.0, 1.0, 1.0],
         color: [0.0, 0.0, 1.0],
     };
-    let directional_light_with_obj = DirectionalLight {
-        position: [-4.0, -4.0, -3.5, 1.0],
-        color: [1.0, 1.0, 1.0],
-    };
 
-    let mut light_obj_model = ModelBuilder::new("resource/models/sphere.obj")
-        .color(directional_light_with_obj.color)
-        .build();
+    let mut light_obj_x = 0.0;
+    let mut light_obj_y = 0.0;
 
     let mut previous_frame_end =
         Some(Box::new(sync::now(system.device.clone())) as Box<dyn GpuFuture>);
@@ -90,6 +86,31 @@ fn main() {
         } => {
             system.recreate_swapchain();
         }
+        Event::WindowEvent { event, .. } => match event {
+            WindowEvent::KeyboardInput {
+                input,
+                is_synthetic: false,
+                ..
+            } => {
+                let key = input.virtual_keycode.unwrap();
+                match key {
+                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                        light_obj_x += 0.1;
+                    }
+                    VirtualKeyCode::A | VirtualKeyCode::Left => {
+                        light_obj_x -= 0.1;
+                    }
+                    VirtualKeyCode::W | VirtualKeyCode::Up => {
+                        light_obj_y -= 0.1;
+                    }
+                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                        light_obj_y += 0.1;
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        },
         // Event::MainEventsCleared => {
         Event::RedrawEventsCleared => {
             previous_frame_end
@@ -106,14 +127,32 @@ fn main() {
             model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 5.41);
             model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
 
+            let elapsed = rotation_start.elapsed().as_secs() as f32
+                + rotation_start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+            let elapsed_as_radians = elapsed * 30.0 * (PI / 180.0);
+
+            let x: f32 = 4.0 * elapsed_as_radians.cos();
+            let z: f32 = -3.0 + (8.0 * elapsed_as_radians.sin());
+
+            let directional_light_with_obj = DirectionalLight {
+                // position: [x, -1.0, z, 1.0],
+                position: [light_obj_x, light_obj_y, 0.0, 0.0],
+                color: [1.0, 1.0, 1.0],
+            };
+
+            let mut light_obj_model = ModelBuilder::new("resource/models/sphere.obj")
+                .color(directional_light_with_obj.color)
+                .build();
+            light_obj_model.scale(0.2);
+
             system.start();
+            // system.geometry(&mut teapot_model);
             system.geometry(&mut model);
-            system.geometry(&mut teapot_model);
             system.ambient();
             // system.directional(&directional_light);
-            system.directional(&directional_light_r);
-            system.directional(&directional_light_g);
-            system.directional(&directional_light_b);
+            // system.directional(&directional_light_r);
+            // system.directional(&directional_light_g);
+            // system.directional(&directional_light_b);
             system.directional(&directional_light_with_obj);
             system.light_object(&directional_light_with_obj, &mut light_obj_model);
             system.finish(&mut previous_frame_end);
