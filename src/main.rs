@@ -8,7 +8,7 @@ mod model;
 mod model_loader;
 mod system;
 use basic::{AmbientLight, DirectionalLight, NormalVertex};
-use cgmath::{InnerSpace, Matrix4, Point3, Vector3};
+use cgmath::{ElementWise, InnerSpace, Matrix4, Point3, Vector3};
 use model::ModelBuilder;
 use system::System;
 use vulkano::buffer::sys;
@@ -42,7 +42,7 @@ fn main() {
     teapot_model.translate(Vector3::new(0.0, 5.0, 0.0));
 
     // 环境光颜色
-    let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+    let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     let mut ambient_color_index = 0;
 
     // 环境光
@@ -113,33 +113,28 @@ fn main() {
                     _ => (),
                 }
             }
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-                ..
-            } => {
-                if button == MouseButton::Left {
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Left && state == winit::event::ElementState::Released {
                     if ambient_color_index == 1 {
-                        ambient_color_index = 4;
+                        ambient_color_index = 3;
                     } else {
                         ambient_color_index -= 1;
                     }
                 }
 
-                if button == MouseButton::Right {
-                    if ambient_color_index == 4 {
+                if button == MouseButton::Right && state == winit::event::ElementState::Released {
+                    if ambient_color_index == 3 {
                         ambient_color_index = 1;
                     } else {
                         ambient_color_index += 1;
                     }
                 }
 
-                // let ambient_light = AmbientLight {
-                //     color: ambient_colors[ambient_color_index].clone(),
-                //     intensity: 0.2,
-                // };
-                // system.set_ambient(&ambient_light);
+                let ambient_light = AmbientLight {
+                    color: ambient_colors[ambient_color_index].clone(),
+                    intensity: 0.2,
+                };
+                system.set_ambient(&ambient_light);
             }
             _ => (),
         },
