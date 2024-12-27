@@ -7,11 +7,12 @@ mod glsl;
 mod model;
 mod model_loader;
 mod system;
-use basic::{AmbientLight, DirectionalLight, NormalVertex};
+use basic::{AmbientLight, ColoredVertex, DirectionalLight, NormalVertex};
 use cgmath::{ElementWise, InnerSpace, Matrix4, Point3, Vector3};
 use model::ModelBuilder;
 use system::System;
 use vulkano::buffer::sys;
+use vulkano::pipeline::graphics::vertex_input::Vertex;
 use winit::dpi::Position;
 mod utils;
 use std::f32::consts::PI;
@@ -22,6 +23,38 @@ use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEven
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
+    let vertices = [
+        NormalVertex {
+            position: [-0.5, -0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // top left corner
+        NormalVertex {
+            position: [-0.5, 0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // bottom left corner
+        NormalVertex {
+            position: [0.5, -0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // top right corner
+        NormalVertex {
+            position: [0.5, -0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // top right corner
+        NormalVertex {
+            position: [-0.5, 0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // bottom left corner
+        NormalVertex {
+            position: [0.5, 0.5, -0.5],
+            color: [1.0, 0.35, 0.137],
+            normal: [0.0; 3],
+        }, // bottom right corner
+    ];
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
@@ -33,11 +66,11 @@ fn main() {
     system.set_view(&view);
 
     // 加载模型
-    let mut model = ModelBuilder::new("resource/models/warcraft.obj").build();
+    let mut model = ModelBuilder::from_file("resource/models/warcraft.obj").build();
     model.scale(0.5);
     model.translate(Vector3::new(-2.0, 0.0, -10.0));
 
-    let mut teapot_model = ModelBuilder::new("resource/models/teapot.obj").build();
+    let mut teapot_model = ModelBuilder::from_file("resource/models/teapot.obj").build();
     teapot_model.scale(0.2);
     teapot_model.translate(Vector3::new(0.0, 5.0, 0.0));
 
@@ -167,7 +200,7 @@ fn main() {
                 color: [1.0, 1.0, 1.0],
             };
 
-            let mut light_obj_model = ModelBuilder::new("resource/models/sphere.obj")
+            let mut light_obj_model = ModelBuilder::from_file("resource/models/sphere.obj")
                 .color(directional_light_with_obj.color)
                 .build();
             light_obj_model.scale(0.2);

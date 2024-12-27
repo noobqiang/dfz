@@ -1,8 +1,20 @@
 #![allow(unused)]
+use std::{default, vec};
+
 use cgmath::{BaseFloat, Matrix4, One, Rad, SquareMatrix, Transform, Vector3};
 
 use super::model_loader::Loader;
 use crate::basic::{ColoredVertex, NormalVertex};
+
+/// 模型数据来源
+#[derive(Default)]
+enum Source {
+    /// 来自模型文件
+    #[default]
+    FILE,
+    /// 来自顶点集合
+    LIST,
+}
 
 pub struct Model {
     data: Vec<NormalVertex>,
@@ -14,18 +26,33 @@ pub struct Model {
     scale: Matrix4<f32>,
 }
 
+#[derive(Default)]
 pub struct ModelBuilder {
     file_name: String,
     custom_color: [f32; 3],
     invert: bool,
+    vertices: Vec<NormalVertex>,
+    source: Source,
 }
 
 impl ModelBuilder {
-    pub fn new(file: &str) -> ModelBuilder {
+    pub fn from_file(file: &str) -> ModelBuilder {
         ModelBuilder {
             file_name: file.to_string(),
             custom_color: [1.0, 1.0, 1.0],
             invert: true,
+            source: Source::FILE,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_vertex(arr: &Vec<NormalVertex>) -> ModelBuilder {
+        ModelBuilder {
+            custom_color: [1.0; 3],
+            invert: true,
+            source: Source::LIST,
+            vertices: arr.to_vec(),
+            ..Default::default()
         }
     }
 
@@ -40,15 +67,27 @@ impl ModelBuilder {
     }
 
     pub fn build(self) -> Model {
-        let loader = Loader::new(self.file_name.as_str(), self.custom_color, self.invert);
-        Model {
-            data: loader.as_normal_vertices(),
-            translation: Matrix4::identity(),
-            rotation: Matrix4::identity(),
-            model: Matrix4::identity(),
-            normals: Matrix4::identity(),
-            require_update: true,
-            scale: Matrix4::identity(),
+        if self {
+            let loader = Loader::new(self.file_name.as_str(), self.custom_color, self.invert);
+            Model {
+                data: loader.as_normal_vertices(),
+                translation: Matrix4::identity(),
+                rotation: Matrix4::identity(),
+                model: Matrix4::identity(),
+                normals: Matrix4::identity(),
+                require_update: true,
+                scale: Matrix4::identity(),
+            }
+        } else {
+            Model {
+                data: self.vertices.clone(),
+                translation: Matrix4::identity(),
+                rotation: Matrix4::identity(),
+                model: Matrix4::identity(),
+                normals: Matrix4::identity(),
+                require_update: true,
+                scale: Matrix4::identity(),
+            }
         }
     }
 }
