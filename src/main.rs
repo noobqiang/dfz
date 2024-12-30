@@ -23,56 +23,61 @@ use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEven
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
-    let vertices = [
+    let vertices = vec![
         NormalVertex {
-            position: [-0.5, -0.5, -0.5],
+            position: [-0.5, -0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 0.0, 1.0],
         }, // top left corner
         NormalVertex {
-            position: [-0.5, 0.5, -0.5],
+            position: [-0.5, 0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 1.0, 0.0],
         }, // bottom left corner
         NormalVertex {
-            position: [0.5, -0.5, -0.5],
+            position: [0.5, -0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 1.0, 0.0],
         }, // top right corner
         NormalVertex {
-            position: [0.5, -0.5, -0.5],
+            position: [0.5, -0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 1.0, 0.0],
         }, // top right corner
         NormalVertex {
-            position: [-0.5, 0.5, -0.5],
+            position: [-0.5, 0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 1.0, 0.0],
         }, // bottom left corner
         NormalVertex {
-            position: [0.5, 0.5, -0.5],
+            position: [0.5, 0.5, 0.5],
             color: [1.0, 0.35, 0.137],
-            normal: [0.0; 3],
+            normal: [0.0, 0.0, -1.0],
         }, // bottom right corner
     ];
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
     let view = Matrix4::look_at_rh(
-        Point3::new(0.0, 0.0, 0.1),
+        Point3::new(0.0, 0.0, 10.0),
         Point3::new(0.0, 0.0, 0.0),
         Vector3::new(0.0, 1.0, 0.0),
     );
     system.set_view(&view);
 
     // 加载模型
-    let mut model = ModelBuilder::from_file("resource/models/warcraft.obj").build();
-    model.scale(0.5);
-    model.translate(Vector3::new(-2.0, 0.0, -10.0));
+    let mut craft_model = ModelBuilder::from_file("resource/models/warcraft.obj").build();
+    craft_model.scale(0.5);
+    craft_model.translate(Vector3::new(-2.0, 0.0, -10.0));
 
     let mut teapot_model = ModelBuilder::from_file("resource/models/teapot.obj").build();
     teapot_model.scale(0.2);
     teapot_model.translate(Vector3::new(0.0, 5.0, 0.0));
+
+    let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
+    // let mut flat_rectangle_model = ModelBuilder::from_file("resource/models/rectangle.obj").build();
+    flat_rectangle_model.scale(2.0);
+    flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -10.0));
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -148,7 +153,7 @@ fn main() {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if button == MouseButton::Left && state == winit::event::ElementState::Released {
-                    if ambient_color_index == 1 {
+                    if ambient_color_index == 0 {
                         ambient_color_index = 3;
                     } else {
                         ambient_color_index -= 1;
@@ -157,7 +162,7 @@ fn main() {
 
                 if button == MouseButton::Right && state == winit::event::ElementState::Released {
                     if ambient_color_index == 3 {
-                        ambient_color_index = 1;
+                        ambient_color_index = 0;
                     } else {
                         ambient_color_index += 1;
                     }
@@ -183,9 +188,9 @@ fn main() {
             let rotation_rad =
                 elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.0;
 
-            model.rotate_zero();
-            model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 5.41);
-            model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
+            craft_model.rotate_zero();
+            craft_model.rotate(Vector3::new(1.0, 0.0, 0.0).normalize(), 5.41);
+            craft_model.rotate(Vector3::new(0.0, 1.0, 0.0).normalize(), rotation_rad as f32);
 
             let elapsed = rotation_start.elapsed().as_secs() as f32
                 + rotation_start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
@@ -203,11 +208,12 @@ fn main() {
             let mut light_obj_model = ModelBuilder::from_file("resource/models/sphere.obj")
                 .color(directional_light_with_obj.color)
                 .build();
-            light_obj_model.scale(0.2);
+            light_obj_model.scale(0.1);
 
             system.start();
             // system.geometry(&mut teapot_model);
-            system.geometry(&mut model);
+            system.geometry(&mut flat_rectangle_model);
+            system.geometry(&mut craft_model);
             system.ambient();
             // system.directional(&directional_light);
             // system.directional(&directional_light_r);

@@ -67,19 +67,20 @@ impl ModelBuilder {
     }
 
     pub fn build(self) -> Model {
-        if self {
-            let loader = Loader::new(self.file_name.as_str(), self.custom_color, self.invert);
-            Model {
-                data: loader.as_normal_vertices(),
-                translation: Matrix4::identity(),
-                rotation: Matrix4::identity(),
-                model: Matrix4::identity(),
-                normals: Matrix4::identity(),
-                require_update: true,
-                scale: Matrix4::identity(),
+        match self.source {
+            Source::FILE => {
+                let loader = Loader::new(self.file_name.as_str(), self.custom_color, self.invert);
+                Model {
+                    data: loader.as_normal_vertices(),
+                    translation: Matrix4::identity(),
+                    rotation: Matrix4::identity(),
+                    model: Matrix4::identity(),
+                    normals: Matrix4::identity(),
+                    require_update: true,
+                    scale: Matrix4::identity(),
+                }
             }
-        } else {
-            Model {
+            Source::LIST => Model {
                 data: self.vertices.clone(),
                 translation: Matrix4::identity(),
                 rotation: Matrix4::identity(),
@@ -87,7 +88,7 @@ impl ModelBuilder {
                 normals: Matrix4::identity(),
                 require_update: true,
                 scale: Matrix4::identity(),
-            }
+            },
         }
     }
 }
