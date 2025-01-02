@@ -31,6 +31,8 @@ pub struct NormalVertex {
     pub normal: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
     pub color: [f32; 3],
+    #[format(R32G32_SFLOAT)]
+    pub uv: [f32; 2],
 }
 
 #[derive(BufferContents, Vertex, Clone)]

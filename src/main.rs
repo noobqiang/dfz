@@ -16,6 +16,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 use winit::dpi::Position;
 mod utils;
 use std::f32::consts::PI;
+use std::io::Cursor;
 use std::time::Instant;
 use utils::*;
 use vulkano::sync::{self, GpuFuture};
@@ -26,35 +27,42 @@ fn main() {
     let vertices = vec![
         NormalVertex {
             position: [-0.5, -0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [1.0, 0.0, 0.0],
             normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
         }, // top left corner
         NormalVertex {
             position: [-0.5, 0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [0.0, 1.0, 0.0],
             normal: [0.0, 1.0, 0.0],
+            uv: [0.0, 1.0],
         }, // bottom left corner
         NormalVertex {
             position: [0.5, -0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [0.0, 0.0, 1.0],
             normal: [0.0, 1.0, 0.0],
+            uv: [1.0, 0.0],
         }, // top right corner
         NormalVertex {
             position: [0.5, -0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [0.0, 0.0, 1.0],
             normal: [0.0, 1.0, 0.0],
+            uv: [1.0, 0.0],
         }, // top right corner
         NormalVertex {
             position: [-0.5, 0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [0.0, 1.0, 0.0],
             normal: [0.0, 1.0, 0.0],
+            uv: [0.0, 1.0],
         }, // bottom left corner
         NormalVertex {
             position: [0.5, 0.5, 0.5],
-            color: [1.0, 0.35, 0.137],
+            color: [1.0, 0.0, 0.0],
             normal: [0.0, 0.0, -1.0],
+            uv: [1.0, 1.0],
         }, // bottom right corner
     ];
+
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
@@ -76,7 +84,7 @@ fn main() {
 
     let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
     // let mut flat_rectangle_model = ModelBuilder::from_file("resource/models/rectangle.obj").build();
-    flat_rectangle_model.scale(2.0);
+    flat_rectangle_model.scale(4.0);
     flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -10.0));
 
     // 环境光颜色

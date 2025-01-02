@@ -1,6 +1,7 @@
-use std::{mem, sync::Arc};
-
 use cgmath::{Matrix4, Point3, Rad, Vector3};
+use std::{io::Cursor, mem, ptr::metadata, sync::Arc};
+use vulkano::format::Format;
+use vulkano::pipeline::graphics::depth_stencil;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -11,7 +12,7 @@ use vulkano::{
         allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
     },
     device::{Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo},
-    image::{view::ImageView, Image},
+    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     instance::{Instance, InstanceCreateInfo},
     memory::allocator::{
         AllocationCreateInfo, FreeListAllocator, GenericMemoryAllocator, MemoryAllocator,
@@ -155,6 +156,36 @@ impl System {
         let descriptor_set_allocator =
             StandardDescriptorSetAllocator::new(device.clone(), Default::default());
 
+        // 加载纹理图片
+        let image_data = {
+            let png_bytes = include_bytes!("../../resource/textures/diamond.png").to_vec();
+            let cursor = Cursor::new(png_bytes);
+            let decoder = png::Decoder::new(cursor);
+            let mut reader = decoder.read_info().unwrap();
+            let info = reader.info();
+            let depth: u32 = match info.bit_depth {
+                png::BitDepth::One => 1,
+                png::BitDepth::Two => 2,
+                png::BitDepth::Four => 4,
+                png::BitDepth::Eight => 8,
+                png::BitDepth::Sixteen => 16,
+            };
+            let image = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::R8G8B8A8_UNORM,
+                    extent: [info.width, info.height, depth],
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                    ..Default::default()
+                },
+            );
+            image.image
+        };
         // shader's entrypoints
         let deferred_vert = deferred_vert::load(device.clone())
             .expect("failed to create shader module")
