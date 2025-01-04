@@ -63,20 +63,34 @@ impl Loader {
         for face in &self.faces {
             let verts = face.verts;
             let normals = face.norms.unwrap();
+            let text = face.text.or(Some([1; 3])).unwrap();
+            let mut uv: [f32; 2] = [0.0; 2];
+            if self.text.len() > text[0] {
+                uv.copy_from_slice(&self.text.get(text[0]).unwrap().vals[..2]);
+            }
             ret.push(NormalVertex {
                 position: self.verts.get(verts[0]).unwrap().vals,
                 normal: self.norms.get(normals[0]).unwrap().vals,
                 color: self.color,
+                uv,
             });
+            if self.text.len() > text[1] {
+                uv.copy_from_slice(&self.text.get(text[1]).unwrap().vals[..2]);
+            }
             ret.push(NormalVertex {
                 position: self.verts.get(verts[1]).unwrap().vals,
                 normal: self.norms.get(normals[1]).unwrap().vals,
                 color: self.color,
+                uv,
             });
+            if self.text.len() > text[2] {
+                uv.copy_from_slice(&self.text.get(text[2]).unwrap().vals[..2]);
+            }
             ret.push(NormalVertex {
                 position: self.verts.get(verts[2]).unwrap().vals,
                 normal: self.norms.get(normals[2]).unwrap().vals,
                 color: self.color,
+                uv,
             });
         }
         ret

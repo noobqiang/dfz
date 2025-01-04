@@ -1,7 +1,11 @@
 use cgmath::{Matrix4, Point3, Rad, Vector3};
-use std::{io::Cursor, mem, ptr::metadata, sync::Arc};
+use std::{io::Cursor, mem, sync::Arc};
+use vulkano::command_buffer::{ClearDepthStencilImageInfo, CopyBufferToImageInfo};
 use vulkano::format::Format;
+use vulkano::image::sampler::{self, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
+use vulkano::image::view::ImageViewCreateInfo;
 use vulkano::pipeline::graphics::depth_stencil;
+use vulkano::DeviceSize;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -31,6 +35,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::get_model_buffer;
 use crate::{
     basic::{AmbientLight, DirectionalLight, VP},
     get_deferred_pipeline, get_dummy_pipeline, get_framebuffers, get_light_buffer,
@@ -78,6 +83,9 @@ pub struct System {
     commands: Option<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>,
     image_index: u32,
     acquire_future: Option<SwapchainAcquireFuture>,
+
+    sampler: Arc<Sampler>,
+    texture: Option<Arc<ImageView>>,
 }
 
 impl System {
@@ -156,36 +164,6 @@ impl System {
         let descriptor_set_allocator =
             StandardDescriptorSetAllocator::new(device.clone(), Default::default());
 
-        // 加载纹理图片
-        let image_data = {
-            let png_bytes = include_bytes!("../../resource/textures/diamond.png").to_vec();
-            let cursor = Cursor::new(png_bytes);
-            let decoder = png::Decoder::new(cursor);
-            let mut reader = decoder.read_info().unwrap();
-            let info = reader.info();
-            let depth: u32 = match info.bit_depth {
-                png::BitDepth::One => 1,
-                png::BitDepth::Two => 2,
-                png::BitDepth::Four => 4,
-                png::BitDepth::Eight => 8,
-                png::BitDepth::Sixteen => 16,
-            };
-            let image = Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::R8G8B8A8_UNORM,
-                    extent: [info.width, info.height, depth],
-                    usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                    ..Default::default()
-                },
-            );
-            image.image
-        };
         // shader's entrypoints
         let deferred_vert = deferred_vert::load(device.clone())
             .expect("failed to create shader module")
@@ -325,6 +303,17 @@ impl System {
         let image_index = 0;
         let acquire_future = None;
 
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
         System {
             instance,
             device,
@@ -355,6 +344,8 @@ impl System {
             commands,
             image_index,
             acquire_future,
+            sampler,
+            texture: None,
         }
     }
     pub fn start(&mut self) {
@@ -396,6 +387,62 @@ impl System {
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
+
+        // 纹理
+        let texture = {
+            let png_bytes = include_bytes!("../../resource/textures/diamond.png").to_vec();
+            let cursor = Cursor::new(png_bytes);
+            let decoder = png::Decoder::new(cursor);
+            let mut reader = decoder.read_info().unwrap();
+            let info = reader.info();
+            let depth: u32 = match info.bit_depth {
+                png::BitDepth::One => 1,
+                png::BitDepth::Two => 2,
+                png::BitDepth::Four => 4,
+                png::BitDepth::Eight => 8,
+                png::BitDepth::Sixteen => 16,
+            };
+            let extent = [info.width, info.height, 1];
+
+            let upload_buffer = Buffer::new_slice(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                        | MemoryTypeFilter::PREFER_HOST,
+                    ..Default::default()
+                },
+                (info.width * info.height * depth) as DeviceSize,
+            )
+            .unwrap();
+            reader
+                .next_frame(&mut upload_buffer.write().unwrap())
+                .unwrap();
+
+            let image = Image::new(
+                self.memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::R8G8B8A8_UNORM,
+                    extent,
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            )
+            .unwrap();
+            builder
+                .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                    upload_buffer,
+                    image.clone(),
+                ))
+                .unwrap();
+            ImageView::new_default(image).unwrap()
+        };
+        self.texture = Some(texture);
 
         let framebuffer = self.framebuffers[image_i as usize].clone();
         builder
@@ -496,13 +543,34 @@ impl System {
                 return;
             }
         }
-        let model_set = get_model_descriptor_set(
-            model,
-            self.memory_allocator.clone(),
-            &self.swapchain,
-            &self.deferred_pipeline,
+        // let model_set = get_model_descriptor_set(
+        //     model,
+        //     self.memory_allocator.clone(),
+        //     &self.swapchain,
+        //     &self.deferred_pipeline,
+        //     &self.descriptor_set_allocator,
+        // );
+        let model_buffer = get_model_buffer(model, self.memory_allocator.clone());
+        let layout = self
+            .deferred_pipeline
+            .layout()
+            .set_layouts()
+            .get(1)
+            .unwrap();
+        let model_set = PersistentDescriptorSet::new(
             &self.descriptor_set_allocator,
-        );
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, model_buffer.clone()),
+                WriteDescriptorSet::image_view_sampler(
+                    1,
+                    self.texture.as_mut().unwrap().clone(),
+                    self.sampler.clone(),
+                ),
+            ],
+            [],
+        )
+        .unwrap();
         let vertex_buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
