@@ -30,6 +30,7 @@ use vulkano::{
     sync::{self, GpuFuture},
     Validated, VulkanError,
 };
+use winit::dpi::LogicalSize;
 use winit::{
     event_loop::EventLoop,
     window::{Window, WindowBuilder},
@@ -104,7 +105,12 @@ impl System {
         .expect("failed to create instance");
 
         // window、surface
-        let window = Arc::new(WindowBuilder::new().build(event_loop).unwrap());
+        let window = Arc::new(
+            WindowBuilder::new()
+                .with_inner_size(LogicalSize::new(1000, 600))
+                .build(event_loop)
+                .unwrap(),
+        );
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,

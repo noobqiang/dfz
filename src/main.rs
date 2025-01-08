@@ -220,7 +220,7 @@ fn main() {
 
             system.start();
             // system.geometry(&mut teapot_model);
-            // system.geometry(&mut flat_rectangle_model);
+            system.geometry(&mut flat_rectangle_model);
             system.geometry(&mut craft_model);
             system.ambient();
             // system.directional(&directional_light);
