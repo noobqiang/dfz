@@ -671,15 +671,16 @@ pub fn get_command_buffers(
 pub fn get_vp_descriptor_set(
     memory_allocator: Arc<dyn MemoryAllocator>,
     swapchain: &Swapchain,
+    vp_buffer: &Subbuffer<VP>,
     pipeline: &Arc<GraphicsPipeline>,
     descriptor_set_allocator: &StandardDescriptorSetAllocator,
 ) -> Arc<PersistentDescriptorSet> {
-    let vp_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
+    // let vp_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
     let layout = pipeline.layout().set_layouts().get(0).unwrap();
     PersistentDescriptorSet::new(
         descriptor_set_allocator,
         layout.clone(),
-        [WriteDescriptorSet::buffer(0, vp_buffer)],
+        [WriteDescriptorSet::buffer(0, vp_buffer.clone())],
         [],
     )
     .unwrap()
@@ -703,34 +704,34 @@ pub fn get_model_descriptor_set(
     .unwrap()
 }
 
-/// get uniform buffer descriptor set
-pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
-    light: &T,
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    color_buffer: Arc<ImageView>,
-    normal_buffer: Arc<ImageView>,
-    swapchain: &Swapchain,
-    pipeline: &Arc<GraphicsPipeline>,
-    descriptor_set_allocator: &StandardDescriptorSetAllocator,
-) -> Arc<PersistentDescriptorSet> {
-    let uniform_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
+// /// get uniform buffer descriptor set
+// pub fn get_lighting_descriptor_set<T: BufferContents + Clone>(
+//     light: &T,
+//     memory_allocator: Arc<dyn MemoryAllocator>,
+//     color_buffer: Arc<ImageView>,
+//     normal_buffer: Arc<ImageView>,
+//     swapchain: &Swapchain,
+//     pipeline: &Arc<GraphicsPipeline>,
+//     descriptor_set_allocator: &StandardDescriptorSetAllocator,
+// ) -> Arc<PersistentDescriptorSet> {
+//     let uniform_buffer = get_vp_buffer(swapchain, memory_allocator.clone());
 
-    let light_buffer = get_light_buffer(light, memory_allocator.clone());
+//     let light_buffer = get_light_buffer(light, memory_allocator.clone());
 
-    let layout = pipeline.layout().set_layouts().get(0).unwrap();
-    PersistentDescriptorSet::new(
-        descriptor_set_allocator,
-        layout.clone(),
-        [
-            WriteDescriptorSet::image_view(0, color_buffer),
-            WriteDescriptorSet::image_view(1, normal_buffer),
-            WriteDescriptorSet::buffer(2, uniform_buffer),
-            WriteDescriptorSet::buffer(3, light_buffer),
-        ],
-        [],
-    )
-    .unwrap()
-}
+//     let layout = pipeline.layout().set_layouts().get(0).unwrap();
+//     PersistentDescriptorSet::new(
+//         descriptor_set_allocator,
+//         layout.clone(),
+//         [
+//             WriteDescriptorSet::image_view(0, color_buffer),
+//             WriteDescriptorSet::image_view(1, normal_buffer),
+//             WriteDescriptorSet::buffer(2, uniform_buffer),
+//             WriteDescriptorSet::buffer(3, light_buffer),
+//         ],
+//         [],
+//     )
+//     .unwrap()
+// }
 
 pub fn get_dummy_descriptor_set<T: BufferContents + Clone>(
     light: &T,
@@ -758,20 +759,26 @@ pub fn get_dummy_descriptor_set<T: BufferContents + Clone>(
 
 pub fn get_vp_buffer(
     swapchain: &Swapchain,
+    view: [[f32; 4]; 4],
+    proj: [[f32; 4]; 4],
     // TOOD: 这里如果使用 &Arc<dyn MemoryAllocator> 在 system.rs 那边会报错
     memory_allocator: Arc<dyn MemoryAllocator>,
 ) -> Subbuffer<VP> {
-    let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
-    let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
-    let view = Matrix4::look_at_rh(
-        Point3::new(0.0, 0.0, 0.1),
-        Point3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-    );
-    let scale = Matrix4::from_scale(0.03);
+    // let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
+    // let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
+    // let view = Matrix4::look_at_rh(
+    //     Point3::new(0.0, 0.0, 0.9),
+    //     Point3::new(0.0, 0.0, 0.0),
+    //     Vector3::new(0.0, 1.0, 0.0),
+    // );
+    // let scale = Matrix4::from_scale(0.03);
+    // let vp_data = VP {
+    //     view: (view * scale).into(),
+    //     projection: proj.into(),
+    // };
     let vp_data = VP {
-        view: (view * scale).into(),
-        projection: proj.into(),
+        view,
+        projection: proj,
     };
     let vp_buffer = Buffer::from_data(
         memory_allocator.clone(),
@@ -786,7 +793,7 @@ pub fn get_vp_buffer(
         },
         vp_data,
     )
-    .expect("failed to create uniform_buffer");
+    .expect("failed to create vp buffer");
     vp_buffer
 }
 

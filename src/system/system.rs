@@ -1,10 +1,9 @@
 use cgmath::{Matrix4, Point3, Rad, Vector3};
+use std::f32::consts;
 use std::{io::Cursor, mem, sync::Arc};
-use vulkano::command_buffer::{ClearDepthStencilImageInfo, CopyBufferToImageInfo};
+use vulkano::command_buffer::CopyBufferToImageInfo;
 use vulkano::format::Format;
-use vulkano::image::sampler::{self, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
-use vulkano::image::view::ImageViewCreateInfo;
-use vulkano::pipeline::graphics::depth_stencil;
+use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
 use vulkano::DeviceSize;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -205,7 +204,6 @@ impl System {
             .unwrap();
 
         // buffers
-        let vp_buffer = get_vp_buffer(&swapchain, memory_allocator.clone());
         let ambient_buffer = get_light_buffer(
             &AmbientLight {
                 color: [1.0; 3],
@@ -283,15 +281,11 @@ impl System {
         )
         .unwrap();
 
-        let vp_set = get_vp_descriptor_set(
-            memory_allocator.clone(),
-            &swapchain,
-            &deferred_pipeline,
-            &descriptor_set_allocator,
-        );
-
         let aspect_ratio = swapchain.image_extent()[0] as f32 / swapchain.image_extent()[1] as f32;
-        let proj = cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
+        // 透视投影
+        let proj = cgmath::perspective(Rad(consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0);
+        // 正射投影
+        // let proj = cgmath::ortho(0.0, 10.0, 0.0, 10.0, 0.01, 100.0);
         let view = Matrix4::look_at_rh(
             Point3::new(0.0, 0.0, 0.1),
             Point3::new(0.0, 0.0, 0.0),
@@ -302,6 +296,14 @@ impl System {
             view: (view * scale).into(),
             projection: proj.into(),
         };
+        let vp_buffer = get_vp_buffer(&swapchain, vp.view, vp.projection, memory_allocator.clone());
+        let vp_set = get_vp_descriptor_set(
+            memory_allocator.clone(),
+            &swapchain,
+            &vp_buffer,
+            &deferred_pipeline,
+            &descriptor_set_allocator,
+        );
 
         let render_stage = RenderStage::Stopped;
 
@@ -826,9 +828,15 @@ impl System {
         let aspect_ratio =
             self.swapchain.image_extent()[0] as f32 / self.swapchain.image_extent()[1] as f32;
         self.vp.projection =
-            cgmath::perspective(Rad(std::f32::consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0).into();
+            cgmath::perspective(Rad(consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0).into();
 
-        self.vp_buffer = get_vp_buffer(&self.swapchain, self.memory_allocator.clone());
+        // self.vp_buffer = get_vp_buffer(&self.swapchain, self.memory_allocator.clone());
+        self.vp_buffer = get_vp_buffer(
+            &self.swapchain,
+            self.vp.view,
+            self.vp.projection,
+            self.memory_allocator.clone(),
+        );
 
         let vp_layout = self
             .deferred_pipeline
@@ -864,23 +872,30 @@ impl System {
     /// 更新 vp 相关值
     pub fn set_view(&mut self, view: &Matrix4<f32>) {
         self.vp.view = view.clone().into();
-        self.vp_buffer = Buffer::from_data(
+        self.vp_buffer = get_vp_buffer(
+            &self.swapchain,
+            self.vp.view,
+            self.vp.projection,
             self.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::UNIFORM_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            VP {
-                view: view.clone().into(),
-                projection: self.vp.projection.clone(),
-            },
-        )
-        .expect("failed to create uniform_buffer");
+        );
+        // self.vp_buffer = Buffer::from_data(
+        //     self.memory_allocator.clone(),
+        //     BufferCreateInfo {
+        //         usage: BufferUsage::UNIFORM_BUFFER,
+        //         ..Default::default()
+        //     },
+        //     AllocationCreateInfo {
+        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+        //             | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+        //         ..Default::default()
+        //     },
+        //     VP {
+        //         view: view.clone().into(),
+        //         projection: self.vp.projection.clone(),
+        //     },
+        // )
+        // .expect("failed to create uniform_buffer");
+
         let layout = self
             .deferred_pipeline
             .layout()

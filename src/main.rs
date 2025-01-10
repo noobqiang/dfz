@@ -1,26 +1,18 @@
-//! This is the source code of the "Windowing" chapter at http://vulkano.rs.
-//!
-//! It is not commented, as the explanations can be found in the book itself.
-
 mod basic;
 mod glsl;
 mod model;
 mod model_loader;
 mod system;
-use basic::{AmbientLight, ColoredVertex, DirectionalLight, NormalVertex};
-use cgmath::{ElementWise, InnerSpace, Matrix4, Point3, Vector3};
+use basic::{AmbientLight, DirectionalLight, NormalVertex};
+use cgmath::{InnerSpace, Matrix4, Point3, Vector3};
 use model::ModelBuilder;
 use system::System;
-use vulkano::buffer::sys;
-use vulkano::pipeline::graphics::vertex_input::Vertex;
-use winit::dpi::Position;
 mod utils;
 use std::f32::consts::PI;
-use std::io::Cursor;
 use std::time::Instant;
 use utils::*;
 use vulkano::sync::{self, GpuFuture};
-use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
+use winit::event::{Event, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
@@ -66,11 +58,12 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
-    let view = Matrix4::look_at_rh(
-        Point3::new(0.0, 0.0, 10.0),
+    let mut view = Matrix4::look_at_rh(
+        Point3::new(0.0, 0.0, 0.1),
         Point3::new(0.0, 0.0, 0.0),
         Vector3::new(0.0, 1.0, 0.0),
     );
+    view = view * Matrix4::from_scale(0.03);
     system.set_view(&view);
 
     // 加载模型
@@ -85,7 +78,8 @@ fn main() {
     let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
     // let mut flat_rectangle_model = ModelBuilder::from_file("resource/models/rectangle.obj").build();
     flat_rectangle_model.scale(4.0);
-    flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -10.0));
+    flat_rectangle_model.translate(Vector3::new(10.0, 0.0, -10.0));
+    flat_rectangle_model.rotate(Vector3::new(1.0, 0.0, 0.0), 1.0);
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -204,8 +198,8 @@ fn main() {
                 + rotation_start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
             let elapsed_as_radians = elapsed * 30.0 * (PI / 180.0);
 
-            let x: f32 = 4.0 * elapsed_as_radians.cos();
-            let z: f32 = -3.0 + (8.0 * elapsed_as_radians.sin());
+            let _x: f32 = 4.0 * elapsed_as_radians.cos();
+            let _z: f32 = -3.0 + (8.0 * elapsed_as_radians.sin());
 
             let directional_light_with_obj = DirectionalLight {
                 // position: [x, -1.0, z, 1.0],
