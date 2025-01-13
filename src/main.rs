@@ -4,15 +4,16 @@ mod model;
 mod model_loader;
 mod system;
 use basic::{AmbientLight, DirectionalLight, NormalVertex};
-use cgmath::{InnerSpace, Matrix4, Point3, Vector3};
+use cgmath::{Angle, InnerSpace, Matrix4, Point3, Rad, Vector3};
 use model::ModelBuilder;
 use system::System;
+use winit::dpi::PhysicalPosition;
 mod utils;
 use std::f32::consts::PI;
 use std::time::Instant;
 use utils::*;
 use vulkano::sync::{self, GpuFuture};
-use winit::event::{Event, MouseButton, VirtualKeyCode, WindowEvent};
+use winit::event::{Event, ModifiersState, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
@@ -58,12 +59,13 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
-    let mut view = Matrix4::look_at_rh(
-        Point3::new(0.0, 0.0, 0.1),
-        Point3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-    );
-    view = view * Matrix4::from_scale(0.03);
+    let mut camera_pos = Point3::new(0.0, 0.0, 3.0);
+    let mut camera_front = Vector3::new(0.0, 0.0, -1.0);
+    let mut camera_target: Point3<f32>;
+    camera_target = camera_pos + camera_front;
+    let camera_up = Vector3::new(0.0, 1.0, 0.0);
+    let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
+    // view = view * Matrix4::from_scale(1.0);
     system.set_view(&view);
 
     // 加载模型
@@ -110,13 +112,24 @@ fn main() {
     //     color: [0.0, 0.0, 1.0],
     // };
 
+    // 事件处理循环中使用的变量
     let mut light_obj_x = 0.0;
     let mut light_obj_y = 0.0;
+    let rotation_start = Instant::now();
+    // 组合按键
+    let mut modifier_state = ModifiersState::empty();
+    // 上一帧鼠标位置
+    let mut last_cusor_position: PhysicalPosition<f64> = PhysicalPosition { x: 0.0, y: 0.0 };
+    // 方向变化灵敏度
+    let sensitivity = 0.01;
+    // 俯仰角
+    let mut pitch: f32 = 0.0;
+    // 偏航角
+    let mut yaw: f32 = 0.0;
 
     let mut previous_frame_end =
         Some(Box::new(sync::now(system.device.clone())) as Box<dyn GpuFuture>);
 
-    let rotation_start = Instant::now();
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
@@ -138,17 +151,43 @@ fn main() {
             } => {
                 let key = input.virtual_keycode.unwrap();
                 match key {
-                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                    VirtualKeyCode::D => {
                         light_obj_x += 0.1;
                     }
-                    VirtualKeyCode::A | VirtualKeyCode::Left => {
+                    VirtualKeyCode::A => {
                         light_obj_x -= 0.1;
                     }
-                    VirtualKeyCode::W | VirtualKeyCode::Up => {
+                    VirtualKeyCode::W => {
                         light_obj_y -= 0.1;
                     }
-                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                    VirtualKeyCode::S => {
                         light_obj_y += 0.1;
+                    }
+                    VirtualKeyCode::Right => {
+                        camera_pos += 0.1 * (camera_front.cross(camera_up).normalize());
+                    }
+                    VirtualKeyCode::Left => {
+                        camera_pos -= 0.1 * (camera_front.cross(camera_up).normalize());
+                    }
+                    VirtualKeyCode::Up => {
+                        camera_pos += 0.1 * camera_front;
+                    }
+                    VirtualKeyCode::Down => {
+                        camera_pos -= 0.1 * camera_front;
+                    }
+                    VirtualKeyCode::Space => {
+                        camera_pos -= 0.1
+                            * (camera_front
+                                .cross(camera_up)
+                                .cross(camera_front)
+                                .normalize());
+                    }
+                    VirtualKeyCode::LShift => {
+                        camera_pos += 0.1
+                            * (camera_front
+                                .cross(camera_up)
+                                .cross(camera_front)
+                                .normalize());
                     }
                     _ => (),
                 }
@@ -175,6 +214,34 @@ fn main() {
                     intensity: 0.2,
                 };
                 system.set_ambient(&ambient_light);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if modifier_state.is_empty() {
+                    last_cusor_position.x = 0.0;
+                    last_cusor_position.y = 0.0;
+                }
+                if modifier_state.alt() {
+                    if last_cusor_position.x != 0.0 || last_cusor_position.y != 0.0 {
+                        let d_x = (position.x - last_cusor_position.x) * sensitivity;
+                        let d_y = (position.y - last_cusor_position.y) * sensitivity;
+                        yaw += d_x as f32;
+                        pitch += d_y as f32;
+                        if pitch > 89.0 {
+                            pitch = 89.0;
+                        }
+                        if pitch < -89.0 {
+                            pitch = -89.0;
+                        }
+                        camera_front.x = Rad::cos(Rad(yaw)) * Rad::cos(Rad(pitch));
+                        camera_front.y = Rad::sin(Rad(pitch));
+                        camera_front.z = Rad::sin(Rad(yaw)) * Rad::cos(Rad(pitch));
+                        camera_front = camera_front.normalize();
+                    };
+                    last_cusor_position = position;
+                }
+            }
+            WindowEvent::ModifiersChanged(state) => {
+                modifier_state = state;
             }
             _ => (),
         },
@@ -212,6 +279,9 @@ fn main() {
                 .build();
             light_obj_model.scale(0.1);
 
+            camera_target = camera_pos + camera_front;
+            let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
+            system.set_view(&view);
             system.start();
             // system.geometry(&mut teapot_model);
             system.geometry(&mut flat_rectangle_model);
