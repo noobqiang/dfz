@@ -4,6 +4,14 @@ use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
 
 #[derive(BufferContents, Clone)]
 #[repr(C)]
+/// 摄像机位置
+pub struct CameraPosition {
+    /// 位置
+    pub position: [f32; 3],
+}
+
+#[derive(BufferContents, Clone)]
+#[repr(C)]
 /// 环境光
 pub struct AmbientLight {
     /// 颜色

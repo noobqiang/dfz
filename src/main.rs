@@ -61,7 +61,7 @@ fn main() {
 
     let mut camera_pos = Point3::new(0.0, 0.0, 3.0);
     let mut camera_front = Vector3::new(0.0, 0.0, -1.0);
-    let mut camera_target: Point3<f32>;
+    let camera_target: Point3<f32>;
     camera_target = camera_pos + camera_front;
     let camera_up = Vector3::new(0.0, 1.0, 0.0);
     let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
@@ -75,13 +75,12 @@ fn main() {
 
     let mut teapot_model = ModelBuilder::from_file("resource/models/teapot.obj").build();
     teapot_model.scale(0.2);
-    teapot_model.translate(Vector3::new(0.0, 5.0, 0.0));
+    teapot_model.translate(Vector3::new(-5.0, 0.0, 0.0));
 
     let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
-    // let mut flat_rectangle_model = ModelBuilder::from_file("resource/models/rectangle.obj").build();
     flat_rectangle_model.scale(4.0);
     flat_rectangle_model.translate(Vector3::new(10.0, 0.0, -10.0));
-    flat_rectangle_model.rotate(Vector3::new(1.0, 0.0, 0.0), 1.0);
+    // flat_rectangle_model.rotate(Vector3::new(1.0, 0.0, 0.0), 1.0);
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -279,7 +278,7 @@ fn main() {
                 .build();
             light_obj_model.scale(0.1);
 
-            camera_target = camera_pos + camera_front;
+            let camera_target = camera_pos + camera_front;
             let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
             system.set_view(&view);
             system.start();
@@ -291,7 +290,7 @@ fn main() {
             // system.directional(&directional_light_r);
             // system.directional(&directional_light_g);
             // system.directional(&directional_light_b);
-            system.directional(&directional_light_with_obj);
+            system.directional(&directional_light_with_obj, camera_pos);
             system.light_object(&directional_light_with_obj, &mut light_obj_model);
             system.finish(&mut previous_frame_end);
         }

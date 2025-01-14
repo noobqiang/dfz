@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Point3, Rad, Vector3};
+use cgmath::{EuclideanSpace, Matrix4, Point3, Rad, Vector3};
 use std::f32::consts;
 use std::{io::Cursor, mem, sync::Arc};
 use vulkano::command_buffer::CopyBufferToImageInfo;
@@ -35,6 +35,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::basic::CameraPosition;
 use crate::get_model_buffer;
 use crate::{
     basic::{AmbientLight, DirectionalLight, VP},
@@ -676,7 +677,7 @@ impl System {
             .draw(self.dummy_buffer.len() as u32, 1, 0, 0)
             .unwrap();
     }
-    pub fn directional(&mut self, light: &DirectionalLight) {
+    pub fn directional(&mut self, light: &DirectionalLight, camera_position: Point3<f32>) {
         match self.render_stage {
             RenderStage::Ambient => {
                 self.render_stage = RenderStage::Directional;
@@ -695,6 +696,22 @@ impl System {
             }
         }
         self.directional_buffer = get_light_buffer(light, self.memory_allocator.clone());
+        let camera_pos_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            CameraPosition {
+                position: camera_position.into(),
+            },
+        )
+        .expect("failed to create a camera position buffer");
         let layout = self
             .directional_pipeline
             .layout()
@@ -708,6 +725,7 @@ impl System {
                 WriteDescriptorSet::image_view(0, self.color_buffer.clone()),
                 WriteDescriptorSet::image_view(1, self.normal_buffer.clone()),
                 WriteDescriptorSet::buffer(2, self.directional_buffer.clone()),
+                WriteDescriptorSet::buffer(3, camera_pos_buffer.clone()),
             ],
             [],
         )
