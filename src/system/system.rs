@@ -1,4 +1,4 @@
-use cgmath::{EuclideanSpace, Matrix4, Point3, Rad, Vector3};
+use cgmath::{Matrix4, Point3, Rad, Vector3};
 use std::f32::consts;
 use std::{io::Cursor, mem, sync::Arc};
 use vulkano::command_buffer::CopyBufferToImageInfo;
@@ -74,6 +74,7 @@ pub struct System {
     framebuffers: Vec<Arc<Framebuffer>>,
     color_buffer: Arc<ImageView>,
     normal_buffer: Arc<ImageView>,
+    frag_pos_buffer: Arc<ImageView>,
     dummy_buffer: Subbuffer<[DummyVertex]>,
     vp_set: Arc<PersistentDescriptorSet>,
     vp: VP,
@@ -263,7 +264,7 @@ impl System {
             viewport.clone(),
         );
 
-        let (framebuffers, color_buffer, normal_buffer) =
+        let (framebuffers, color_buffer, normal_buffer, frag_pos_buffer) =
             get_framebuffers(&images, render_pass.clone(), memory_allocator.clone());
 
         let dummy_buffer = Buffer::from_iter(
@@ -345,6 +346,7 @@ impl System {
             framebuffers,
             color_buffer,
             normal_buffer,
+            frag_pos_buffer,
             dummy_buffer,
             vp_set,
             vp,
@@ -458,6 +460,7 @@ impl System {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![
+                        Some([0.0, 0.0, 0.0, 1.0].into()),
                         Some([0.0, 0.0, 0.0, 1.0].into()),
                         Some([0.0, 0.0, 0.0, 1.0].into()),
                         Some([0.0, 0.0, 0.0, 1.0].into()),
@@ -726,6 +729,7 @@ impl System {
                 WriteDescriptorSet::image_view(1, self.normal_buffer.clone()),
                 WriteDescriptorSet::buffer(2, self.directional_buffer.clone()),
                 WriteDescriptorSet::buffer(3, camera_pos_buffer.clone()),
+                WriteDescriptorSet::image_view(4, self.frag_pos_buffer.clone()),
             ],
             [],
         )
@@ -829,7 +833,7 @@ impl System {
             Err(e) => panic!("Failed to recreate swapchain: {:?}", e),
         };
 
-        let (new_framebuffers, new_color_buffer, new_normal_buffer) =
+        let (new_framebuffers, new_color_buffer, new_normal_buffer, new_frag_pos_buffer) =
             System::window_size_dependent_setup(
                 &new_images,
                 self.render_pass.clone(),
@@ -841,6 +845,7 @@ impl System {
         self.framebuffers = new_framebuffers;
         self.color_buffer = new_color_buffer;
         self.normal_buffer = new_normal_buffer;
+        self.frag_pos_buffer = new_frag_pos_buffer;
 
         // 更新投影矩阵
         let aspect_ratio =
@@ -879,12 +884,17 @@ impl System {
         render_pass: Arc<RenderPass>,
         memory_allocator: Arc<dyn MemoryAllocator>,
         viewport: &mut Viewport,
-    ) -> (Vec<Arc<Framebuffer>>, Arc<ImageView>, Arc<ImageView>) {
+    ) -> (
+        Vec<Arc<Framebuffer>>,
+        Arc<ImageView>,
+        Arc<ImageView>,
+        Arc<ImageView>,
+    ) {
         let extent = images[0].extent();
         viewport.extent = [extent[0] as f32, extent[1] as f32];
-        let (framebuffers, color_buffer, normal_buffer) =
+        let (framebuffers, color_buffer, normal_buffer, frag_pos_buffer) =
             get_framebuffers(images, render_pass.clone(), memory_allocator.clone());
-        (framebuffers, color_buffer, normal_buffer)
+        (framebuffers, color_buffer, normal_buffer, frag_pos_buffer)
     }
 
     /// 更新 vp 相关值

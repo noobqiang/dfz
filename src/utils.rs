@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+use cgmath::num_traits::clamp;
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
 use std::sync::Arc;
 use std::time::Instant;
@@ -98,6 +99,12 @@ pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<Re
                 load_op: Clear,
                 store_op: DontCare,
             },
+            frag_pos: {
+                format: Format::R16G16B16A16_SFLOAT,
+                samples: 1,
+                load_op: Clear,
+                store_op: DontCare,
+            },
             depth: {
                 format: Format::D16_UNORM,
                 samples: 1,
@@ -107,14 +114,14 @@ pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<Re
         },
         passes: [
             {
-                color: [color, normals],
+                color: [color, normals, frag_pos],
                 depth_stencil: {depth},
                 input: []
             },
             {
                 color: [final_color],
                 depth_stencil: {depth},
-                input: [color, normals]
+                input: [color, normals, frag_pos]
             }
         ]
     )
@@ -125,7 +132,12 @@ pub fn get_framebuffers(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,
     memory_allocator: Arc<dyn MemoryAllocator>,
-) -> (Vec<Arc<Framebuffer>>, Arc<ImageView>, Arc<ImageView>) {
+) -> (
+    Vec<Arc<Framebuffer>>,
+    Arc<ImageView>,
+    Arc<ImageView>,
+    Arc<ImageView>,
+) {
     let depth_buffer = ImageView::new_default(
         Image::new(
             memory_allocator.clone(),
@@ -173,6 +185,22 @@ pub fn get_framebuffers(
     )
     .unwrap();
 
+    let frag_pos_buffer = ImageView::new_default(
+        Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R16G16B16A16_SFLOAT,
+                extent: images[0].extent(),
+                usage: ImageUsage::INPUT_ATTACHMENT | ImageUsage::COLOR_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
     let framebuffers = images
         .iter()
         .map(|image| {
@@ -184,6 +212,7 @@ pub fn get_framebuffers(
                         view,
                         color_buffer.clone(),
                         normal_buffer.clone(),
+                        frag_pos_buffer.clone(),
                         depth_buffer.clone(),
                     ],
                     ..Default::default()
@@ -193,7 +222,12 @@ pub fn get_framebuffers(
         })
         .collect::<Vec<_>>();
 
-    (framebuffers, color_buffer.clone(), normal_buffer.clone())
+    (
+        framebuffers,
+        color_buffer.clone(),
+        normal_buffer.clone(),
+        frag_pos_buffer.clone(),
+    )
 }
 
 pub fn get_deferred_pipeline(

@@ -20,38 +20,38 @@ fn main() {
     let vertices = vec![
         NormalVertex {
             position: [-0.5, -0.5, 0.5],
-            color: [1.0, 0.0, 0.0],
+            color: [1.0, 1.0, 1.0],
             normal: [0.0, 0.0, 1.0],
             uv: [0.0, 0.0],
         }, // top left corner
         NormalVertex {
             position: [-0.5, 0.5, 0.5],
-            color: [0.0, 1.0, 0.0],
-            normal: [0.0, 1.0, 0.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
             uv: [0.0, 1.0],
         }, // bottom left corner
         NormalVertex {
             position: [0.5, -0.5, 0.5],
-            color: [0.0, 0.0, 1.0],
-            normal: [0.0, 1.0, 0.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
             uv: [1.0, 0.0],
         }, // top right corner
         NormalVertex {
             position: [0.5, -0.5, 0.5],
-            color: [0.0, 0.0, 1.0],
-            normal: [0.0, 1.0, 0.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
             uv: [1.0, 0.0],
         }, // top right corner
         NormalVertex {
             position: [-0.5, 0.5, 0.5],
-            color: [0.0, 1.0, 0.0],
-            normal: [0.0, 1.0, 0.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
             uv: [0.0, 1.0],
         }, // bottom left corner
         NormalVertex {
             position: [0.5, 0.5, 0.5],
-            color: [1.0, 0.0, 0.0],
-            normal: [0.0, 0.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
             uv: [1.0, 1.0],
         }, // bottom right corner
     ];
@@ -79,7 +79,7 @@ fn main() {
 
     let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
     flat_rectangle_model.scale(4.0);
-    flat_rectangle_model.translate(Vector3::new(10.0, 0.0, -10.0));
+    flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -20.0));
     // flat_rectangle_model.rotate(Vector3::new(1.0, 0.0, 0.0), 1.0);
 
     // 环境光颜色
@@ -124,7 +124,7 @@ fn main() {
     // 俯仰角
     let mut pitch: f32 = 0.0;
     // 偏航角
-    let mut yaw: f32 = 0.0;
+    let mut yaw: f32 = -90.0;
 
     let mut previous_frame_end =
         Some(Box::new(sync::now(system.device.clone())) as Box<dyn GpuFuture>);
@@ -150,28 +150,28 @@ fn main() {
             } => {
                 let key = input.virtual_keycode.unwrap();
                 match key {
-                    VirtualKeyCode::D => {
+                    VirtualKeyCode::Right => {
                         light_obj_x += 0.1;
                     }
-                    VirtualKeyCode::A => {
+                    VirtualKeyCode::Left => {
                         light_obj_x -= 0.1;
                     }
-                    VirtualKeyCode::W => {
+                    VirtualKeyCode::Up => {
                         light_obj_y -= 0.1;
                     }
-                    VirtualKeyCode::S => {
+                    VirtualKeyCode::Down => {
                         light_obj_y += 0.1;
                     }
-                    VirtualKeyCode::Right => {
+                    VirtualKeyCode::D => {
                         camera_pos += 0.1 * (camera_front.cross(camera_up).normalize());
                     }
-                    VirtualKeyCode::Left => {
+                    VirtualKeyCode::A => {
                         camera_pos -= 0.1 * (camera_front.cross(camera_up).normalize());
                     }
-                    VirtualKeyCode::Up => {
+                    VirtualKeyCode::W => {
                         camera_pos += 0.1 * camera_front;
                     }
-                    VirtualKeyCode::Down => {
+                    VirtualKeyCode::S => {
                         camera_pos -= 0.1 * camera_front;
                     }
                     VirtualKeyCode::Space => {
@@ -269,7 +269,7 @@ fn main() {
 
             let directional_light_with_obj = DirectionalLight {
                 // position: [x, -1.0, z, 1.0],
-                position: [light_obj_x, light_obj_y, 0.0, 0.0],
+                position: [light_obj_x, light_obj_y, -15.0, 0.0],
                 color: [1.0, 1.0, 1.0],
             };
 
