@@ -65,11 +65,12 @@ fn main() {
     camera_target = camera_pos + camera_front;
     let camera_up = Vector3::new(0.0, 1.0, 0.0);
     let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
-    // view = view * Matrix4::from_scale(1.0);
     system.set_view(&view);
 
     // 加载模型
-    let mut craft_model = ModelBuilder::from_file("resource/models/warcraft.obj").build();
+    let mut craft_model = ModelBuilder::from_file("resource/models/warcraft.obj")
+        // .texture("resource/textures/Default_baseColor.png")
+        .build();
     craft_model.scale(0.5);
     craft_model.translate(Vector3::new(-2.0, 0.0, -10.0));
 
@@ -77,10 +78,11 @@ fn main() {
     teapot_model.scale(0.2);
     teapot_model.translate(Vector3::new(-5.0, 0.0, 0.0));
 
-    let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices).build();
+    let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices)
+        .texture("resource/textures/diamond.png")
+        .build();
     flat_rectangle_model.scale(4.0);
     flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -20.0));
-    // flat_rectangle_model.rotate(Vector3::new(1.0, 0.0, 0.0), 1.0);
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -244,7 +246,6 @@ fn main() {
             }
             _ => (),
         },
-        // Event::MainEventsCleared => {
         Event::RedrawEventsCleared => {
             previous_frame_end
                 .as_mut()
@@ -268,8 +269,7 @@ fn main() {
             let _z: f32 = -3.0 + (8.0 * elapsed_as_radians.sin());
 
             let directional_light_with_obj = DirectionalLight {
-                // position: [x, -1.0, z, 1.0],
-                position: [light_obj_x, light_obj_y, -15.0, 0.0],
+                position: [light_obj_x, light_obj_y, 0.0, 0.0],
                 color: [1.0, 1.0, 1.0],
             };
 
@@ -281,10 +281,10 @@ fn main() {
             let camera_target = camera_pos + camera_front;
             let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
             system.set_view(&view);
-            system.start();
-            // system.geometry(&mut teapot_model);
-            system.geometry(&mut flat_rectangle_model);
-            system.geometry(&mut craft_model);
+            system.set_model(&mut teapot_model);
+            system.set_model(&mut flat_rectangle_model);
+            system.set_model(&mut craft_model);
+            system.defer();
             system.ambient();
             // system.directional(&directional_light);
             // system.directional(&directional_light_r);

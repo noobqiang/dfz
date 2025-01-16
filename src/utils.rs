@@ -2,6 +2,7 @@
 
 use cgmath::num_traits::clamp;
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
+use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{
@@ -42,6 +43,7 @@ use vulkano::pipeline::{
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::EntryPoint;
 use vulkano::swapchain::{Surface, Swapchain};
+use vulkano::DeviceSize;
 
 use crate::basic::{ColoredVertex, NormalVertex, VP};
 use crate::glsl::{deferred_vert, vs};
@@ -875,4 +877,61 @@ pub fn get_light_buffer<T: BufferContents + Clone>(
         (*light).clone(),
     )
     .expect("failed to create a light buffer")
+}
+
+/// 加载材质
+pub fn get_texture(model: &Model, memory_allocator: Arc<dyn MemoryAllocator>) -> Arc<ImageView> {
+    let texture = {
+        let cursor = Cursor::new(model.texture_data().expect("模型需要绑定材质数据"));
+        let decoder = png::Decoder::new(cursor);
+        let mut reader = decoder.read_info().unwrap();
+        let info = reader.info();
+        let depth: u32 = match info.bit_depth {
+            png::BitDepth::One => 1,
+            png::BitDepth::Two => 2,
+            png::BitDepth::Four => 4,
+            png::BitDepth::Eight => 8,
+            png::BitDepth::Sixteen => 16,
+        };
+        let extent = [info.width, info.height, 1];
+
+        let upload_buffer = Buffer::new_slice(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::PREFER_HOST,
+                ..Default::default()
+            },
+            (info.width * info.height * depth) as DeviceSize,
+        )
+        .unwrap();
+        reader
+            .next_frame(&mut upload_buffer.write().unwrap())
+            .unwrap();
+
+        let image = Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent,
+                usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap();
+        // builder
+        //     .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+        //         upload_buffer,
+        //         image.clone(),
+        //     ))
+        //     .unwrap();
+        ImageView::new_default(image).unwrap()
+    };
+    texture
 }

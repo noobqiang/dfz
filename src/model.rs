@@ -1,5 +1,10 @@
 #![allow(unused)]
-use std::{default, vec};
+use std::{
+    default, fs,
+    path::{self, Path, PathBuf},
+    sync::Arc,
+    vec,
+};
 
 use cgmath::{BaseFloat, Matrix4, One, Rad, SquareMatrix, Transform, Vector3};
 
@@ -24,6 +29,7 @@ pub struct Model {
     normals: Matrix4<f32>,
     require_update: bool,
     scale: Matrix4<f32>,
+    texture: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -33,6 +39,7 @@ pub struct ModelBuilder {
     invert: bool,
     vertices: Vec<NormalVertex>,
     source: Source,
+    texture_path: Option<PathBuf>,
 }
 
 impl ModelBuilder {
@@ -66,11 +73,17 @@ impl ModelBuilder {
         self
     }
 
+    pub fn texture(mut self, file_name: &str) -> ModelBuilder {
+        self.texture_path = Some(path::absolute(file_name).unwrap());
+        self
+    }
+
     pub fn build(self) -> Model {
+        let mut model: Model;
         match self.source {
             Source::FILE => {
                 let loader = Loader::new(self.file_name.as_str(), self.custom_color, self.invert);
-                Model {
+                model = Model {
                     data: loader.as_normal_vertices(),
                     translation: Matrix4::identity(),
                     rotation: Matrix4::identity(),
@@ -78,18 +91,39 @@ impl ModelBuilder {
                     normals: Matrix4::identity(),
                     require_update: true,
                     scale: Matrix4::identity(),
-                }
+                    texture: None,
+                };
             }
-            Source::LIST => Model {
-                data: self.vertices.clone(),
-                translation: Matrix4::identity(),
-                rotation: Matrix4::identity(),
-                model: Matrix4::identity(),
-                normals: Matrix4::identity(),
-                require_update: true,
-                scale: Matrix4::identity(),
-            },
+            Source::LIST => {
+                model = Model {
+                    data: self.vertices.clone(),
+                    translation: Matrix4::identity(),
+                    rotation: Matrix4::identity(),
+                    model: Matrix4::identity(),
+                    normals: Matrix4::identity(),
+                    require_update: true,
+                    scale: Matrix4::identity(),
+                    texture: None,
+                };
+            }
         }
+
+        match self.texture_path {
+            Some(path) => {
+                // 材质文件读取
+                model.texture = Some(
+                    fs::read(path.clone()).expect(
+                        format!(
+                            "材质文件读取失败：path={}",
+                            path.as_os_str().to_str().unwrap_or("")
+                        )
+                        .as_str(),
+                    ),
+                );
+            }
+            None => {}
+        }
+        model
     }
 }
 
@@ -137,5 +171,9 @@ impl Model {
             });
         }
         ret
+    }
+
+    pub fn texture_data(&self) -> Option<Vec<u8>> {
+        self.texture.clone()
     }
 }

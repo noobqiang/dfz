@@ -35,7 +35,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::basic::CameraPosition;
+use crate::basic::{CameraPosition, NormalVertex};
 use crate::get_model_buffer;
 use crate::{
     basic::{AmbientLight, DirectionalLight, VP},
@@ -47,10 +47,24 @@ use crate::{
     select_physical_device,
 };
 
+/// 模型数据
+struct ModelData {
+    /// 模型描述符集
+    model_set: Arc<PersistentDescriptorSet>,
+    /// 顶点数据缓冲区
+    vertex_buffer: Subbuffer<[NormalVertex]>,
+    /// 材质数据缓冲区
+    texture_buffer: Option<Subbuffer<[u8]>>,
+    /// 材质 image, 用于绑定到 uniform
+    texture_image: Arc<Image>,
+}
+
+/// 渲染系统
 pub struct System {
     instance: Arc<Instance>,
     pub device: Arc<Device>,
     queue: Arc<Queue>,
+    // queue2: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     images: Vec<Arc<Image>>,
 
@@ -62,7 +76,6 @@ pub struct System {
     descriptor_set_allocator: StandardDescriptorSetAllocator,
 
     vp_buffer: Subbuffer<VP>,
-    // model_buffer: Subbuffer<deferred_vert::Model_Data>,
     ambient_buffer: Subbuffer<AmbientLight>,
     directional_buffer: Subbuffer<DirectionalLight>,
     render_pass: Arc<RenderPass>,
@@ -87,7 +100,12 @@ pub struct System {
     acquire_future: Option<SwapchainAcquireFuture>,
 
     sampler: Arc<Sampler>,
-    texture: Option<Arc<ImageView>>,
+    models: Vec<ModelData>,
+
+    /// 默认材质数据缓冲区
+    default_texture_buffer: Subbuffer<[u8]>,
+    /// 默认材质 image, 用于绑定到 uniform
+    default_texture_image: Arc<Image>,
 }
 
 impl System {
@@ -134,6 +152,7 @@ impl System {
         )
         .expect("failed to create device");
         let queue = queues.next().unwrap();
+        // let queue2 = queues.next().unwrap();
 
         // swapchain、image
         let (swapchain, images) = {
@@ -278,7 +297,6 @@ impl System {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            // vertices.clone(),
             DummyVertex::list().iter().cloned(),
         )
         .unwrap();
@@ -307,12 +325,6 @@ impl System {
             &descriptor_set_allocator,
         );
 
-        let render_stage = RenderStage::Stopped;
-
-        let commands = None;
-        let image_index = 0;
-        let acquire_future = None;
-
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo {
@@ -323,6 +335,50 @@ impl System {
             },
         )
         .unwrap();
+
+        // 初始化默认材质
+        let png_bytes = include_bytes!("../../resource/textures/default_texture.png").to_vec();
+        let cursor = Cursor::new(png_bytes);
+        let decoder = png::Decoder::new(cursor);
+        let mut reader = decoder.read_info().unwrap();
+        let info = reader.info();
+        let depth: u32 = match info.bit_depth {
+            png::BitDepth::One => 1,
+            png::BitDepth::Two => 2,
+            png::BitDepth::Four => 4,
+            png::BitDepth::Eight => 8,
+            png::BitDepth::Sixteen => 16,
+        };
+        let extent = [info.width, info.height, 1];
+        let texture_image = Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent,
+                usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .unwrap();
+        let upload_buffer = Buffer::new_slice(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::PREFER_HOST,
+                ..Default::default()
+            },
+            (info.width * info.height * depth) as DeviceSize,
+        )
+        .unwrap();
+        reader
+            .next_frame(&mut upload_buffer.write().unwrap())
+            .unwrap();
 
         System {
             instance,
@@ -351,17 +407,21 @@ impl System {
             vp_set,
             vp,
             viewport,
-            render_stage,
-            commands,
-            image_index,
-            acquire_future,
+            render_stage: RenderStage::Stopped,
+            commands: None,
+            image_index: 0,
+            acquire_future: None,
             sampler,
-            texture: None,
+            models: Vec::new(),
+            default_texture_buffer: upload_buffer,
+            default_texture_image: texture_image,
         }
     }
-    pub fn start(&mut self) {
+
+    /// 渲染模型材质和形状
+    pub fn defer(&mut self) {
         match self.render_stage {
-            RenderStage::Stopped => {
+            RenderStage::LoadModel => {
                 self.render_stage = RenderStage::Deferred;
             }
             RenderStage::NeedsRedraw => {
@@ -399,62 +459,30 @@ impl System {
         )
         .unwrap();
 
-        // 纹理
-        let texture = {
-            let png_bytes = include_bytes!("../../resource/textures/diamond.png").to_vec();
-            let cursor = Cursor::new(png_bytes);
-            let decoder = png::Decoder::new(cursor);
-            let mut reader = decoder.read_info().unwrap();
-            let info = reader.info();
-            let depth: u32 = match info.bit_depth {
-                png::BitDepth::One => 1,
-                png::BitDepth::Two => 2,
-                png::BitDepth::Four => 4,
-                png::BitDepth::Eight => 8,
-                png::BitDepth::Sixteen => 16,
-            };
-            let extent = [info.width, info.height, 1];
-
-            let upload_buffer = Buffer::new_slice(
-                self.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::TRANSFER_SRC,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
-                        | MemoryTypeFilter::PREFER_HOST,
-                    ..Default::default()
-                },
-                (info.width * info.height * depth) as DeviceSize,
-            )
+        // 材质处理
+        // 默认材质
+        builder
+            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                self.default_texture_buffer.clone(),
+                self.default_texture_image.clone(),
+            ))
             .unwrap();
-            reader
-                .next_frame(&mut upload_buffer.write().unwrap())
-                .unwrap();
+        // 模型材质
+        for item in &self.models {
+            match &item.texture_buffer {
+                Some(texture_buffer) => {
+                    builder
+                        .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                            texture_buffer.clone(),
+                            item.texture_image.clone(),
+                        ))
+                        .unwrap();
+                }
+                None => {}
+            }
+        }
 
-            let image = Image::new(
-                self.memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::R8G8B8A8_UNORM,
-                    extent,
-                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            )
-            .unwrap();
-            builder
-                .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
-                    upload_buffer,
-                    image.clone(),
-                ))
-                .unwrap();
-            ImageView::new_default(image).unwrap()
-        };
-        self.texture = Some(texture);
-
+        // 开始渲染通道
         let framebuffer = self.framebuffers[image_i as usize].clone();
         builder
             .begin_render_pass(
@@ -476,10 +504,33 @@ impl System {
             .unwrap()
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .unwrap();
+
+        // 开始渲染模型
+        for item in &self.models {
+            builder
+                .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+                .unwrap()
+                .bind_pipeline_graphics(self.deferred_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    pipeline::PipelineBindPoint::Graphics,
+                    self.deferred_pipeline.layout().clone(),
+                    0,
+                    (self.vp_set.clone(), item.model_set.clone()),
+                )
+                .unwrap()
+                .bind_vertex_buffers(0, item.vertex_buffer.clone())
+                .unwrap()
+                .draw(item.vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap();
+        }
+
         self.commands = Some(builder);
         self.image_index = image_i;
         self.acquire_future = Some(acquire_future);
     }
+
+    /// 渲染最后步骤，执行前面的步骤构建的命令
     pub fn finish(&mut self, previous_frame_end: &mut Option<Box<dyn GpuFuture>>) {
         match self.render_stage {
             RenderStage::Directional => {}
@@ -537,12 +588,20 @@ impl System {
             }
         }
 
+        self.models.clear();
         self.commands = None;
         self.render_stage = RenderStage::Stopped;
     }
-    pub fn geometry(&mut self, model: &mut Model) {
+
+    /// 加载模型
+    pub fn set_model(&mut self, model: &mut Model) {
         match self.render_stage {
-            RenderStage::Deferred => {}
+            RenderStage::Stopped => {
+                self.render_stage = RenderStage::LoadModel;
+            }
+            RenderStage::LoadModel => {
+                self.render_stage = RenderStage::LoadModel;
+            }
             RenderStage::NeedsRedraw => {
                 self.recreate_swapchain();
                 self.render_stage = RenderStage::Stopped;
@@ -555,13 +614,58 @@ impl System {
                 return;
             }
         }
-        // let model_set = get_model_descriptor_set(
-        //     model,
-        //     self.memory_allocator.clone(),
-        //     &self.swapchain,
-        //     &self.deferred_pipeline,
-        //     &self.descriptor_set_allocator,
-        // );
+
+        let (texture_buffer, texture_image) = match model.texture_data() {
+            Some(texture_data) => {
+                // 纹理
+                let cursor = Cursor::new(texture_data);
+                let decoder = png::Decoder::new(cursor);
+                let mut reader = decoder.read_info().unwrap();
+                let info = reader.info();
+                let depth: u32 = match info.bit_depth {
+                    png::BitDepth::One => 1,
+                    png::BitDepth::Two => 2,
+                    png::BitDepth::Four => 4,
+                    png::BitDepth::Eight => 8,
+                    png::BitDepth::Sixteen => 16,
+                };
+                let extent = [info.width, info.height, 1];
+
+                let upload_buffer = Buffer::new_slice(
+                    self.memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::TRANSFER_SRC,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                            | MemoryTypeFilter::PREFER_HOST,
+                        ..Default::default()
+                    },
+                    (info.width * info.height * depth) as DeviceSize,
+                )
+                .unwrap();
+                reader
+                    .next_frame(&mut upload_buffer.write().unwrap())
+                    .unwrap();
+
+                let image = Image::new(
+                    self.memory_allocator.clone(),
+                    ImageCreateInfo {
+                        image_type: ImageType::Dim2d,
+                        format: Format::R8G8B8A8_UNORM,
+                        extent,
+                        usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo::default(),
+                )
+                .unwrap();
+                (Some(upload_buffer), image)
+            }
+            None => (None, self.default_texture_image.clone()),
+        };
+
         let model_buffer = get_model_buffer(model, self.memory_allocator.clone());
         let layout = self
             .deferred_pipeline
@@ -576,7 +680,7 @@ impl System {
                 WriteDescriptorSet::buffer(0, model_buffer.clone()),
                 WriteDescriptorSet::image_view_sampler(
                     1,
-                    self.texture.as_mut().unwrap().clone(),
+                    ImageView::new_default(texture_image.clone()).unwrap(),
                     self.sampler.clone(),
                 ),
             ],
@@ -598,28 +702,20 @@ impl System {
         )
         .unwrap();
 
-        self.commands
-            .as_mut()
-            .unwrap()
-            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-            .unwrap()
-            .bind_pipeline_graphics(self.deferred_pipeline.clone())
-            .unwrap()
-            .bind_descriptor_sets(
-                pipeline::PipelineBindPoint::Graphics,
-                self.deferred_pipeline.layout().clone(),
-                0,
-                (self.vp_set.clone(), model_set.clone()),
-            )
-            .unwrap()
-            .bind_vertex_buffers(0, vertex_buffer.clone())
-            .unwrap()
-            .draw(vertex_buffer.len() as u32, 1, 0, 0)
-            .unwrap();
+        let model_data = ModelData {
+            model_set,
+            vertex_buffer,
+            texture_buffer,
+            texture_image,
+        };
+        self.models.push(model_data);
     }
+
     pub fn set_ambient(&mut self, light: &AmbientLight) {
         self.ambient_buffer = get_light_buffer(light, self.memory_allocator.clone());
     }
+
+    /// 环境光
     pub fn ambient(&mut self) {
         match self.render_stage {
             RenderStage::Deferred => {
@@ -680,6 +776,8 @@ impl System {
             .draw(self.dummy_buffer.len() as u32, 1, 0, 0)
             .unwrap();
     }
+
+    /// 定向光
     pub fn directional(&mut self, light: &DirectionalLight, camera_position: Point3<f32>) {
         match self.render_stage {
             RenderStage::Ambient => {
@@ -853,7 +951,6 @@ impl System {
         self.vp.projection =
             cgmath::perspective(Rad(consts::FRAC_PI_2), aspect_ratio, 0.01, 100.0).into();
 
-        // self.vp_buffer = get_vp_buffer(&self.swapchain, self.memory_allocator.clone());
         self.vp_buffer = get_vp_buffer(
             &self.swapchain,
             self.vp.view,
@@ -906,24 +1003,6 @@ impl System {
             self.vp.projection,
             self.memory_allocator.clone(),
         );
-        // self.vp_buffer = Buffer::from_data(
-        //     self.memory_allocator.clone(),
-        //     BufferCreateInfo {
-        //         usage: BufferUsage::UNIFORM_BUFFER,
-        //         ..Default::default()
-        //     },
-        //     AllocationCreateInfo {
-        //         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-        //             | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-        //         ..Default::default()
-        //     },
-        //     VP {
-        //         view: view.clone().into(),
-        //         projection: self.vp.projection.clone(),
-        //     },
-        // )
-        // .expect("failed to create uniform_buffer");
-
         let layout = self
             .deferred_pipeline
             .layout()
@@ -943,6 +1022,7 @@ impl System {
 #[derive(Debug, Clone)]
 enum RenderStage {
     Stopped,
+    LoadModel,
     Deferred,
     Ambient,
     Directional,
