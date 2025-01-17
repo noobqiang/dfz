@@ -1,10 +1,15 @@
 use cgmath::{Matrix4, Point3, Rad, Vector3};
+use image::ImageDecoder;
+use std::default;
 use std::f32::consts;
+use std::io::{BufWriter, Write};
 use std::{io::Cursor, mem, sync::Arc};
 use vulkano::command_buffer::CopyBufferToImageInfo;
 use vulkano::format::Format;
 use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
-use vulkano::DeviceSize;
+use vulkano::image::view::{ImageViewCreateInfo, ImageViewType};
+use vulkano::image::{view, ImageCreateFlags};
+use vulkano::shader::spirv::BuiltIn;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -29,6 +34,7 @@ use vulkano::{
     sync::{self, GpuFuture},
     Validated, VulkanError,
 };
+use vulkano::{device, DeviceSize};
 use winit::dpi::LogicalSize;
 use winit::{
     event_loop::EventLoop,
@@ -36,7 +42,6 @@ use winit::{
 };
 
 use crate::basic::{CameraPosition, NormalVertex};
-use crate::get_model_buffer;
 use crate::{
     basic::{AmbientLight, DirectionalLight, VP},
     get_deferred_pipeline, get_dummy_pipeline, get_framebuffers, get_light_buffer,
@@ -46,6 +51,7 @@ use crate::{
     model_loader::DummyVertex,
     select_physical_device,
 };
+use crate::{get_model_buffer, get_skybox_pipeline};
 
 /// 模型数据
 struct ModelData {
@@ -80,6 +86,7 @@ pub struct System {
     directional_buffer: Subbuffer<DirectionalLight>,
     render_pass: Arc<RenderPass>,
     deferred_pipeline: Arc<GraphicsPipeline>,
+    skybox_pipeline: Arc<GraphicsPipeline>,
     ambient_pipeline: Arc<GraphicsPipeline>,
     directional_pipeline: Arc<GraphicsPipeline>,
     light_obj_pipeline: Arc<GraphicsPipeline>,
@@ -106,6 +113,10 @@ pub struct System {
     default_texture_buffer: Subbuffer<[u8]>,
     /// 默认材质 image, 用于绑定到 uniform
     default_texture_image: Arc<Image>,
+    skybox_buffer: Subbuffer<[u8]>,
+    skybox_image: Arc<Image>,
+    skybox_model_set: Option<Arc<PersistentDescriptorSet>>,
+    skybox_vertex_buffer: Option<Subbuffer<[NormalVertex]>>,
 }
 
 impl System {
@@ -223,6 +234,14 @@ impl System {
             .unwrap()
             .entry_point("main")
             .unwrap();
+        let skybox_vert = skybox_vert::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+        let skybox_frag = skybox_frag::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
 
         // buffers
         let ambient_buffer = get_light_buffer(
@@ -259,6 +278,13 @@ impl System {
             deferred_pass.clone(),
             deferred_vert.clone(),
             deferred_frag.clone(),
+            viewport.clone(),
+        );
+        let skybox_pipeline = get_skybox_pipeline(
+            device.clone(),
+            deferred_pass.clone(),
+            skybox_vert.clone(),
+            skybox_frag.clone(),
             viewport.clone(),
         );
         let directional_pipeline = get_dummy_pipeline(
@@ -380,6 +406,77 @@ impl System {
             .next_frame(&mut upload_buffer.write().unwrap())
             .unwrap();
 
+        // 天空盒
+        let (skybox_buffer, skybox_image) = {
+            let front = include_bytes!("../../resource/textures/sky/front.png");
+            let back = include_bytes!("../../resource/textures/sky/back.png");
+            let left = include_bytes!("../../resource/textures/sky/left.png");
+            let right = include_bytes!("../../resource/textures/sky/right.png");
+            let top = include_bytes!("../../resource/textures/sky/top.png");
+            let bottom = include_bytes!("../../resource/textures/sky/bottom.png");
+            let datas = [
+                left.to_vec(),
+                right.to_vec(),
+                top.to_vec(),
+                bottom.to_vec(),
+                front.to_vec(),
+                back.to_vec(),
+            ];
+            let png_bytes = include_bytes!("../../resource/textures/sky/back.png").to_vec();
+            let cursor = Cursor::new(png_bytes);
+            let decoder = png::Decoder::new(cursor);
+            let reader = decoder.read_info().unwrap();
+            let info = reader.info();
+            let format = Format::R8G8B8A8_SRGB;
+            let extent = [info.width, info.height, 1];
+            let array_layers = 6u32;
+            let buffer_size = format.block_size()
+                * extent
+                    .into_iter()
+                    .map(|e| e as DeviceSize)
+                    .product::<DeviceSize>()
+                * array_layers as DeviceSize;
+            let upload_buffer = Buffer::new_slice(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                        | MemoryTypeFilter::PREFER_HOST,
+                    ..Default::default()
+                },
+                buffer_size,
+            )
+            .unwrap();
+            {
+                let mut image_data = &mut *upload_buffer.write().unwrap();
+                for item in datas.iter() {
+                    let cursor = Cursor::new(item);
+                    let decoder = png::Decoder::new(cursor);
+                    let mut reader = decoder.read_info().unwrap();
+                    reader.next_frame(image_data).unwrap();
+                    image_data = &mut image_data[(info.width * info.height * 4) as usize..];
+                }
+            }
+            let image = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format,
+                    extent,
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                    flags: ImageCreateFlags::CUBE_COMPATIBLE,
+                    array_layers,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            )
+            .unwrap();
+            (upload_buffer, image)
+        };
+
         System {
             instance,
             device,
@@ -396,6 +493,7 @@ impl System {
             directional_buffer,
             render_pass,
             deferred_pipeline,
+            skybox_pipeline,
             ambient_pipeline,
             directional_pipeline,
             light_obj_pipeline,
@@ -415,6 +513,10 @@ impl System {
             models: Vec::new(),
             default_texture_buffer: upload_buffer,
             default_texture_image: texture_image,
+            skybox_buffer,
+            skybox_image,
+            skybox_model_set: None,
+            skybox_vertex_buffer: None,
         }
     }
 
@@ -459,6 +561,13 @@ impl System {
         )
         .unwrap();
 
+        // 天空盒
+        builder
+            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                self.skybox_buffer.clone(),
+                self.skybox_image.clone(),
+            ))
+            .unwrap();
         // 材质处理
         // 默认材质
         builder
@@ -503,6 +612,32 @@ impl System {
             )
             .unwrap()
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap();
+
+        // 天空盒
+        builder
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
+            .bind_pipeline_graphics(self.skybox_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                pipeline::PipelineBindPoint::Graphics,
+                self.skybox_pipeline.layout().clone(),
+                0,
+                (
+                    self.vp_set.clone(),
+                    self.skybox_model_set.clone().unwrap().clone(),
+                ),
+            )
+            .unwrap()
+            .bind_vertex_buffers(0, self.skybox_vertex_buffer.clone().unwrap().clone())
+            .unwrap()
+            .draw(
+                self.skybox_vertex_buffer.clone().unwrap().len() as u32,
+                1,
+                0,
+                0,
+            )
             .unwrap();
 
         // 开始渲染模型
@@ -593,6 +728,47 @@ impl System {
         self.render_stage = RenderStage::Stopped;
     }
 
+    pub fn set_skybox(&mut self, model: &mut Model) {
+        let layout = self.skybox_pipeline.layout().set_layouts().get(1).unwrap();
+        let model_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [WriteDescriptorSet::image_view_sampler(
+                0,
+                ImageView::new(
+                    self.skybox_image.clone(),
+                    ImageViewCreateInfo {
+                        view_type: ImageViewType::Cube,
+                        subresource_range: self.skybox_image.subresource_range(),
+                        format: Format::R8G8B8A8_SRGB,
+                        usage: ImageUsage::SAMPLED,
+                        ..Default::default()
+                    },
+                )
+                .unwrap(),
+                self.sampler.clone(),
+            )],
+            [],
+        )
+        .unwrap();
+        let vertex_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            model.data().iter().cloned(),
+        )
+        .unwrap();
+        self.skybox_model_set = Some(model_set);
+        self.skybox_vertex_buffer = Some(vertex_buffer);
+    }
+
     /// 加载模型
     pub fn set_model(&mut self, model: &mut Model) {
         match self.render_stage {
@@ -678,10 +854,24 @@ impl System {
             layout.clone(),
             [
                 WriteDescriptorSet::buffer(0, model_buffer.clone()),
-                WriteDescriptorSet::image_view_sampler(
+                // WriteDescriptorSet::image_view_sampler(
+                //     1,
+                //     ImageView::new_default(texture_image.clone()).unwrap(),
+                //     self.sampler.clone(),
+                // ),
+                WriteDescriptorSet::image_view_sampler_array(
                     1,
-                    ImageView::new_default(texture_image.clone()).unwrap(),
-                    self.sampler.clone(),
+                    0,
+                    [
+                        (
+                            ImageView::new_default(texture_image.clone()).unwrap(),
+                            self.sampler.clone(),
+                        ),
+                        (
+                            ImageView::new_default(texture_image.clone()).unwrap(),
+                            self.sampler.clone(),
+                        ),
+                    ],
                 ),
             ],
             [],
@@ -1089,5 +1279,21 @@ mod light_obj_frag {
     vulkano_shaders::shader! {
         ty: "fragment",
         path: "src/system/shaders/light_obj.frag",
+    }
+}
+
+///
+mod skybox_vert {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/system/shaders/skybox.vert",
+    }
+}
+
+///
+mod skybox_frag {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/system/shaders/skybox.frag",
     }
 }

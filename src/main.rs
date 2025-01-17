@@ -17,6 +17,229 @@ use winit::event::{Event, ModifiersState, MouseButton, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
+    let skybox = vec![
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        //
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        //
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        //
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        //
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, 1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        //
+        NormalVertex {
+            position: [-1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, -1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [-1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+        NormalVertex {
+            position: [1.0, -1.0, 1.0],
+            color: [1.0, 1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
+    ];
     let vertices = vec![
         NormalVertex {
             position: [-0.5, -0.5, 0.5],
@@ -83,6 +306,8 @@ fn main() {
         .build();
     flat_rectangle_model.scale(4.0);
     flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -20.0));
+
+    let mut skybox_model = ModelBuilder::from_vertex(&skybox).build();
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -281,6 +506,7 @@ fn main() {
             let camera_target = camera_pos + camera_front;
             let view = Matrix4::look_at_rh(camera_pos, camera_target, camera_up);
             system.set_view(&view);
+            system.set_skybox(&mut skybox_model);
             system.set_model(&mut teapot_model);
             system.set_model(&mut flat_rectangle_model);
             system.set_model(&mut craft_model);
