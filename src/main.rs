@@ -282,7 +282,8 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
-    let mut camera_pos = Point3::new(0.0, 0.0, 3.0);
+    // 摄像机
+    let mut camera_pos = Point3::new(0.0, 0.0, 0.0);
     let mut camera_front = Vector3::new(0.0, 0.0, -1.0);
     let camera_target: Point3<f32>;
     camera_target = camera_pos + camera_front;
@@ -316,7 +317,7 @@ fn main() {
     // 环境光
     let ambient_light = AmbientLight {
         color: ambient_colors[ambient_color_index].clone(),
-        intensity: 0.2,
+        intensity: 1.0,
     };
     system.set_ambient(&ambient_light);
 
@@ -437,7 +438,7 @@ fn main() {
 
                 let ambient_light = AmbientLight {
                     color: ambient_colors[ambient_color_index].clone(),
-                    intensity: 0.2,
+                    intensity: 1.0,
                 };
                 system.set_ambient(&ambient_light);
             }

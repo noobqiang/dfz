@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Point3, Rad, Vector3};
+use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
 use image::ImageDecoder;
 use std::default;
 use std::f32::consts;
@@ -8,7 +8,7 @@ use vulkano::command_buffer::CopyBufferToImageInfo;
 use vulkano::format::Format;
 use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
 use vulkano::image::view::{ImageViewCreateInfo, ImageViewType};
-use vulkano::image::{view, ImageCreateFlags};
+use vulkano::image::{view, ImageAspects, ImageCreateFlags, ImageSubresourceRange};
 use vulkano::shader::spirv::BuiltIn;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -408,21 +408,27 @@ impl System {
 
         // 天空盒
         let (skybox_buffer, skybox_image) = {
-            let front = include_bytes!("../../resource/textures/sky/front.png");
-            let back = include_bytes!("../../resource/textures/sky/back.png");
-            let left = include_bytes!("../../resource/textures/sky/left.png");
-            let right = include_bytes!("../../resource/textures/sky/right.png");
-            let top = include_bytes!("../../resource/textures/sky/top.png");
-            let bottom = include_bytes!("../../resource/textures/sky/bottom.png");
+            let front = include_bytes!("../../resource/textures/sky/front-1.png");
+            let back = include_bytes!("../../resource/textures/sky/back-1.png");
+            let left = include_bytes!("../../resource/textures/sky/left-1.png");
+            let right = include_bytes!("../../resource/textures/sky/right-1.png");
+            let top = include_bytes!("../../resource/textures/sky/top-1.png");
+            let bottom = include_bytes!("../../resource/textures/sky/bottom-1.png");
+            // let front = include_bytes!("../../resource/textures/sky/back-1.png");
+            // let back = include_bytes!("../../resource/textures/sky/back-1.png");
+            // let left = include_bytes!("../../resource/textures/sky/back-1.png");
+            // let right = include_bytes!("../../resource/textures/sky/back-1.png");
+            // let top = include_bytes!("../../resource/textures/sky/back-1.png");
+            // let bottom = include_bytes!("../../resource/textures/sky/back-1.png");
             let datas = [
-                left.to_vec(),
                 right.to_vec(),
-                top.to_vec(),
+                left.to_vec(),
                 bottom.to_vec(),
-                front.to_vec(),
+                top.to_vec(),
                 back.to_vec(),
+                front.to_vec(),
             ];
-            let png_bytes = include_bytes!("../../resource/textures/sky/back.png").to_vec();
+            let png_bytes = include_bytes!("../../resource/textures/sky/back-1.png").to_vec();
             let cursor = Cursor::new(png_bytes);
             let decoder = png::Decoder::new(cursor);
             let reader = decoder.read_info().unwrap();
@@ -615,6 +621,31 @@ impl System {
             .unwrap();
 
         // 天空盒
+
+        let vp = VP {
+            view: self.vp.view.clone(),
+            projection: self.vp.projection.clone(),
+        };
+        let one: [f32; 3] = [vp.view[0][0], vp.view[0][1], vp.view[0][2]];
+        let two: [f32; 3] = [vp.view[1][0], vp.view[1][1], vp.view[1][2]];
+        let three: [f32; 3] = [vp.view[2][0], vp.view[2][1], vp.view[2][2]];
+        let v: [[f32; 3]; 3] = [one, two, three];
+        let v3: Matrix3<f32> = v.into();
+        let v4: Matrix4<f32> = v3.into();
+        let view: [[f32; 4]; 4] = v4.into();
+        let vp_buffer = get_vp_buffer(
+            &self.swapchain,
+            view,
+            vp.projection,
+            self.memory_allocator.clone(),
+        );
+        let vp_set = get_vp_descriptor_set(
+            self.memory_allocator.clone(),
+            &self.swapchain,
+            &vp_buffer,
+            &self.skybox_pipeline,
+            &self.descriptor_set_allocator,
+        );
         builder
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .unwrap()
@@ -625,7 +656,7 @@ impl System {
                 self.skybox_pipeline.layout().clone(),
                 0,
                 (
-                    self.vp_set.clone(),
+                    vp_set.clone(),
                     self.skybox_model_set.clone().unwrap().clone(),
                 ),
             )

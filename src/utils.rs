@@ -319,8 +319,10 @@ pub fn get_skybox_pipeline(
             input_assembly_state: Some(InputAssemblyState::default()),
             viewport_state: Some(ViewportState::default()),
             rasterization_state: Some(RasterizationState {
-                cull_mode: CullMode::Back,
+                cull_mode: CullMode::Front,
                 front_face: FrontFace::CounterClockwise,
+                // cull_mode: CullMode::Back,
+                // front_face: FrontFace::Clockwise,
                 ..Default::default()
             }),
             multisample_state: Some(MultisampleState::default()),
