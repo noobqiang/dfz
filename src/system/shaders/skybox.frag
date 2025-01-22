@@ -7,5 +7,6 @@ layout(set = 1, binding = 0) uniform samplerCube skybox;
 layout(location = 0) out vec4 f_color;
 
 void main() {
-    f_color = texture(skybox, tex_coords);
+    vec4 color = vec4(1.0, 1.0, 1.0, 1.0);
+    f_color = texture(skybox, tex_coords) * color;
 }

@@ -13,6 +13,9 @@ layout(set = 0, binding = 0) uniform VP_Data {
 } vp_uniforms;
 
 void main() {
-    gl_Position = vp_uniforms.projection * vp_uniforms.view * vec4(position, 1.0);
+    // gl_Position = vp_uniforms.projection * vp_uniforms.view * vec4(position, 1.0);
+    // 让深度值永远为 1.0
+    vec4 pos = vp_uniforms.projection * vp_uniforms.view * vec4(position, 1.0);
+    gl_Position = pos.xyww;
     tex_coords = position;
 }

@@ -15,5 +15,4 @@ void main() {
     vec3 combined_color = ambient_color * subpassLoad(u_color).rgb;
     vec3 useless = subpassLoad(u_normals).rgb;
     f_color = vec4(combined_color, 1.0);
-    // f_color = vec4(subpassLoad(u_normals).rgb, 1.0);
 }

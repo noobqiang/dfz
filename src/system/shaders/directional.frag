@@ -29,7 +29,5 @@ void main() {
     vec3 specular = 0.5 * spec * directional_color;
 
     vec3 combined_color = (directional_color + specular) * subpassLoad(u_color).rgb;
-    // vec3 combined_color = directional_color * subpassLoad(u_color).rgb;
     f_color = vec4(combined_color, 1.0);
-    // f_color = vec4(subpassLoad(u_normals).rgb, 1.0);
 }

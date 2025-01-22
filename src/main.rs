@@ -17,268 +17,6 @@ use winit::event::{Event, ModifiersState, MouseButton, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
-    let skybox = vec![
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        //
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        //
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        //
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        //
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, 1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        //
-        NormalVertex {
-            position: [-1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, -1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [-1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-        NormalVertex {
-            position: [1.0, -1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        },
-    ];
-    let vertices = vec![
-        NormalVertex {
-            position: [-0.5, -0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
-        }, // top left corner
-        NormalVertex {
-            position: [-0.5, 0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 1.0],
-        }, // bottom left corner
-        NormalVertex {
-            position: [0.5, -0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [1.0, 0.0],
-        }, // top right corner
-        NormalVertex {
-            position: [0.5, -0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [1.0, 0.0],
-        }, // top right corner
-        NormalVertex {
-            position: [-0.5, 0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 1.0],
-        }, // bottom left corner
-        NormalVertex {
-            position: [0.5, 0.5, 0.5],
-            color: [1.0, 1.0, 1.0],
-            normal: [0.0, 0.0, 1.0],
-            uv: [1.0, 1.0],
-        }, // bottom right corner
-    ];
-
     let event_loop = EventLoop::new();
     let mut system = System::new(&event_loop);
 
@@ -292,9 +30,7 @@ fn main() {
     system.set_view(&view);
 
     // 加载模型
-    let mut craft_model = ModelBuilder::from_file("resource/models/warcraft.obj")
-        // .texture("resource/textures/Default_baseColor.png")
-        .build();
+    let mut craft_model = ModelBuilder::from_file("resource/models/warcraft.obj").build();
     craft_model.scale(0.5);
     craft_model.translate(Vector3::new(-2.0, 0.0, -10.0));
 
@@ -302,13 +38,13 @@ fn main() {
     teapot_model.scale(0.2);
     teapot_model.translate(Vector3::new(-5.0, 0.0, 0.0));
 
-    let mut flat_rectangle_model = ModelBuilder::from_vertex(&vertices)
+    let mut flat_rectangle_model = ModelBuilder::from_file("resource/models/rectangle.obj")
         .texture("resource/textures/diamond.png")
         .build();
     flat_rectangle_model.scale(4.0);
     flat_rectangle_model.translate(Vector3::new(0.0, 0.0, -20.0));
 
-    let mut skybox_model = ModelBuilder::from_vertex(&skybox).build();
+    let mut skybox_model = ModelBuilder::from_file("resource/models/sphere.obj").build();
 
     // 环境光颜色
     let ambient_colors = [[1.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -317,27 +53,9 @@ fn main() {
     // 环境光
     let ambient_light = AmbientLight {
         color: ambient_colors[ambient_color_index].clone(),
-        intensity: 1.0,
+        intensity: 0.2,
     };
     system.set_ambient(&ambient_light);
-
-    // 定向光
-    // let directional_light = DirectionalLight {
-    //     position: [-4.0, -4.0, 0.0, 1.0],
-    //     color: [1.0, 1.0, 1.0],
-    // };
-    // let directional_light_r = DirectionalLight {
-    //     position: [-4.0, 0.0, -4.0, 1.0],
-    //     color: [1.0, 0.0, 0.0],
-    // };
-    // let directional_light_g = DirectionalLight {
-    //     position: [0.0, -4.0, 1.0, 1.0],
-    //     color: [0.0, 1.0, 0.0],
-    // };
-    // let directional_light_b = DirectionalLight {
-    //     position: [4.0, -2.0, 1.0, 1.0],
-    //     color: [0.0, 0.0, 1.0],
-    // };
 
     // 事件处理循环中使用的变量
     let mut light_obj_x = 0.0;
@@ -438,7 +156,7 @@ fn main() {
 
                 let ambient_light = AmbientLight {
                     color: ambient_colors[ambient_color_index].clone(),
-                    intensity: 1.0,
+                    intensity: 0.2,
                 };
                 system.set_ambient(&ambient_light);
             }
@@ -513,10 +231,6 @@ fn main() {
             system.set_model(&mut craft_model);
             system.defer();
             system.ambient();
-            // system.directional(&directional_light);
-            // system.directional(&directional_light_r);
-            // system.directional(&directional_light_g);
-            // system.directional(&directional_light_b);
             system.directional(&directional_light_with_obj, camera_pos);
             system.light_object(&directional_light_with_obj, &mut light_obj_model);
             system.finish(&mut previous_frame_end);

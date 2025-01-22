@@ -29,7 +29,7 @@ use vulkano::memory::allocator::{
 use vulkano::pipeline::graphics::color_blend::{
     AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
 };
-use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
+use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::{CullMode, FrontFace, RasterizationState};
@@ -45,7 +45,7 @@ use vulkano::shader::EntryPoint;
 use vulkano::swapchain::{Surface, Swapchain};
 use vulkano::DeviceSize;
 
-use crate::basic::{ColoredVertex, NormalVertex, VP};
+use crate::basic::{AmbientLight, ColoredVertex, NormalVertex, VP};
 use crate::glsl::{deferred_vert, vs};
 use crate::model::Model;
 use crate::model_loader::DummyVertex;
@@ -321,16 +321,23 @@ pub fn get_skybox_pipeline(
             rasterization_state: Some(RasterizationState {
                 cull_mode: CullMode::Front,
                 front_face: FrontFace::CounterClockwise,
-                // cull_mode: CullMode::Back,
-                // front_face: FrontFace::Clockwise,
                 ..Default::default()
             }),
             multisample_state: Some(MultisampleState::default()),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
-                ColorBlendAttachmentState::default(),
+                ColorBlendAttachmentState {
+                    blend: None,
+                    ..Default::default()
+                },
             )),
-            depth_stencil_state: Some(DepthStencilState::default()),
+            depth_stencil_state: Some(DepthStencilState {
+                depth: Some(DepthState {
+                    write_enable: false,
+                    compare_op: CompareOp::Equal,
+                }),
+                ..Default::default()
+            }),
             dynamic_state: [DynamicState::Viewport].into_iter().collect(),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(layout)

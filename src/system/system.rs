@@ -244,13 +244,6 @@ impl System {
             .unwrap();
 
         // buffers
-        let ambient_buffer = get_light_buffer(
-            &AmbientLight {
-                color: [1.0; 3],
-                intensity: 0.1,
-            },
-            memory_allocator.clone(),
-        );
         let directional_buffer = get_light_buffer(
             &DirectionalLight {
                 position: [0.0; 4],
@@ -282,7 +275,7 @@ impl System {
         );
         let skybox_pipeline = get_skybox_pipeline(
             device.clone(),
-            deferred_pass.clone(),
+            lighting_pass.clone(),
             skybox_vert.clone(),
             skybox_frag.clone(),
             viewport.clone(),
@@ -351,6 +344,13 @@ impl System {
             &descriptor_set_allocator,
         );
 
+        // 默认环境光
+        let ambient_light = AmbientLight {
+            color: [1.0; 3],
+            intensity: 1.0,
+        };
+        let ambient_buffer = get_light_buffer(&ambient_light, memory_allocator.clone());
+
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo {
@@ -414,19 +414,13 @@ impl System {
             let right = include_bytes!("../../resource/textures/sky/right-1.png");
             let top = include_bytes!("../../resource/textures/sky/top-1.png");
             let bottom = include_bytes!("../../resource/textures/sky/bottom-1.png");
-            // let front = include_bytes!("../../resource/textures/sky/back-1.png");
-            // let back = include_bytes!("../../resource/textures/sky/back-1.png");
-            // let left = include_bytes!("../../resource/textures/sky/back-1.png");
-            // let right = include_bytes!("../../resource/textures/sky/back-1.png");
-            // let top = include_bytes!("../../resource/textures/sky/back-1.png");
-            // let bottom = include_bytes!("../../resource/textures/sky/back-1.png");
             let datas = [
-                right.to_vec(),
                 left.to_vec(),
+                right.to_vec(),
                 bottom.to_vec(),
                 top.to_vec(),
-                back.to_vec(),
                 front.to_vec(),
+                back.to_vec(),
             ];
             let png_bytes = include_bytes!("../../resource/textures/sky/back-1.png").to_vec();
             let cursor = Cursor::new(png_bytes);
@@ -620,57 +614,6 @@ impl System {
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .unwrap();
 
-        // 天空盒
-
-        let vp = VP {
-            view: self.vp.view.clone(),
-            projection: self.vp.projection.clone(),
-        };
-        let one: [f32; 3] = [vp.view[0][0], vp.view[0][1], vp.view[0][2]];
-        let two: [f32; 3] = [vp.view[1][0], vp.view[1][1], vp.view[1][2]];
-        let three: [f32; 3] = [vp.view[2][0], vp.view[2][1], vp.view[2][2]];
-        let v: [[f32; 3]; 3] = [one, two, three];
-        let v3: Matrix3<f32> = v.into();
-        let v4: Matrix4<f32> = v3.into();
-        let view: [[f32; 4]; 4] = v4.into();
-        let vp_buffer = get_vp_buffer(
-            &self.swapchain,
-            view,
-            vp.projection,
-            self.memory_allocator.clone(),
-        );
-        let vp_set = get_vp_descriptor_set(
-            self.memory_allocator.clone(),
-            &self.swapchain,
-            &vp_buffer,
-            &self.skybox_pipeline,
-            &self.descriptor_set_allocator,
-        );
-        builder
-            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-            .unwrap()
-            .bind_pipeline_graphics(self.skybox_pipeline.clone())
-            .unwrap()
-            .bind_descriptor_sets(
-                pipeline::PipelineBindPoint::Graphics,
-                self.skybox_pipeline.layout().clone(),
-                0,
-                (
-                    vp_set.clone(),
-                    self.skybox_model_set.clone().unwrap().clone(),
-                ),
-            )
-            .unwrap()
-            .bind_vertex_buffers(0, self.skybox_vertex_buffer.clone().unwrap().clone())
-            .unwrap()
-            .draw(
-                self.skybox_vertex_buffer.clone().unwrap().len() as u32,
-                1,
-                0,
-                0,
-            )
-            .unwrap();
-
         // 开始渲染模型
         for item in &self.models {
             builder
@@ -713,8 +656,60 @@ impl System {
                 return;
             }
         }
-
         let mut commands = self.commands.take().unwrap();
+
+        // 天空盒
+        let vp = VP {
+            view: self.vp.view.clone(),
+            projection: self.vp.projection.clone(),
+        };
+        let one: [f32; 3] = [vp.view[0][0], vp.view[0][1], vp.view[0][2]];
+        let two: [f32; 3] = [vp.view[1][0], vp.view[1][1], vp.view[1][2]];
+        let three: [f32; 3] = [vp.view[2][0], vp.view[2][1], vp.view[2][2]];
+        let v: [[f32; 3]; 3] = [one, two, three];
+        let v3: Matrix3<f32> = v.into();
+        let v4: Matrix4<f32> = v3.into();
+        let view: [[f32; 4]; 4] = v4.into();
+        let vp_buffer = get_vp_buffer(
+            &self.swapchain,
+            view,
+            vp.projection,
+            self.memory_allocator.clone(),
+        );
+        let layout = self.skybox_pipeline.layout().set_layouts().get(0).unwrap();
+        let vp_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [WriteDescriptorSet::buffer(0, vp_buffer.clone())],
+            [],
+        )
+        .unwrap();
+
+        commands
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .unwrap()
+            .bind_pipeline_graphics(self.skybox_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                pipeline::PipelineBindPoint::Graphics,
+                self.skybox_pipeline.layout().clone(),
+                0,
+                (
+                    vp_set.clone(),
+                    self.skybox_model_set.clone().unwrap().clone(),
+                ),
+            )
+            .unwrap()
+            .bind_vertex_buffers(0, self.skybox_vertex_buffer.clone().unwrap().clone())
+            .unwrap()
+            .draw(
+                self.skybox_vertex_buffer.clone().unwrap().len() as u32,
+                1,
+                0,
+                0,
+            )
+            .unwrap();
+
         commands.end_render_pass(Default::default()).unwrap();
         let command_buffer = commands.build().unwrap();
 
@@ -932,11 +927,12 @@ impl System {
         self.models.push(model_data);
     }
 
+    /// 设置环境光
     pub fn set_ambient(&mut self, light: &AmbientLight) {
         self.ambient_buffer = get_light_buffer(light, self.memory_allocator.clone());
     }
 
-    /// 环境光
+    /// 环境光渲染
     pub fn ambient(&mut self) {
         match self.render_stage {
             RenderStage::Deferred => {
